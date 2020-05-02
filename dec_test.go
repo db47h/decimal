@@ -11,24 +11,26 @@ import (
 func Test_decNorm(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
-	again:
 		w := uint(rand.Uint64()) % _BD
-		if w%10 == 0 {
-			goto again
-		}
 		e := uint(rand.Intn(_WD + 1))
 		h, l := bits.Mul(w, pow10(e))
 		// convert h, l from base _B (2**64) to base _BD (10**19) or 2**32 -> 10**9
 		h, l = bits.Div(h, l, _BD)
-		d, s := dec{Word(l), Word(h)}.norm()
-		if len(d) > 1 || d[0] != Word(w) || s != e {
-			t.Fatalf("%ve%v => dec{%v, %v}.norm() = %v, %v --- Expected [%d], %d",
-				w, e, l, h, d, s, w, e)
+		d, s := dec{0, Word(l), Word(h), 0}.norm()
+		// d should now have a single element with e shifted left
+		ew := w * pow10(_WD-mag(w))
+		// expected shift
+		// _WD :   _WD  :  _WD  : ...
+		// _WD : S + mag(w) + e : ...
+		es := _WD*2 - (mag(w) + e) + _WD
+		if len(d) > 1 || d[0] != Word(ew) || s != es {
+			t.Fatalf("%ve%v => dec{0, %v, %v, 0}.norm() = %v, %v --- Expected [%d], %d",
+				w, e, l, h, d, s, w, es)
 		}
 	}
 }
 
-func Test_decDigits(t *testing.T) {
+func Test_mag(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
 		n := uint(rand.Uint64())
@@ -36,16 +38,10 @@ func Test_decDigits(t *testing.T) {
 		for m := n; m != 0; m /= 10 {
 			d++
 		}
-		if dd := decDigits(n); dd != d {
-			t.Fatalf("decDigits(%d) = %d, expected %d", n, dd, d)
+		if dd := mag(n); dd != d {
+			t.Fatalf("mag(%d) = %d, expected %d", n, dd, d)
 		}
 	}
-}
-
-func Test_decShr10(t *testing.T) {
-	d := dec{1234, 0, 1234567890123456789}
-	d, r, tnz := d.shr10(20)
-	t.Log(d, r, tnz)
 }
 
 func Test_decSetInt(t *testing.T) {
@@ -63,24 +59,33 @@ var (
 
 func Benchmark_decNorm(b *testing.B) {
 	rand.Seed(0xdeadbeefbadf00d)
+	d := dec{}.make(2)[:0]
 	for i := 0; i < b.N; i++ {
 		w := uint(rand.Uint64()) % _BD
 		e := uint(rand.Intn(_WD))
 		h, l := w/pow10(_WD-e), (w%pow10(_WD-e))*pow10(e)
-		benchD, benchU = dec{Word(l), Word(h)}.norm()
+		d = d.make(2)
+		d[0], d[1] = Word(l), Word(h)
+		benchD, benchU = d.norm()
+	}
+}
+
+func Benchmark_mag(b *testing.B) {
+	rand.Seed(0xdeadbeefbadf00d)
+	for i := 0; i < b.N; i++ {
+		benchU = mag(uint(rand.Uint64()) % _BD)
 	}
 }
 
 func Benchmark_decDigits(b *testing.B) {
 	rand.Seed(0xdeadbeefbadf00d)
+	d := dec{}.make(1)
 	for i := 0; i < b.N; i++ {
-		benchU = decDigits(uint(rand.Uint64()) % _BD)
-	}
-}
-
-func BenchmarkDecDigits(b *testing.B) {
-	rand.Seed(0xdeadbeefbadf00d)
-	for i := 0; i < b.N; i++ {
-		benchU = dec{Word(rand.Uint64()) % _BD}.digits()
+		w := uint(rand.Uint64()) % _BD
+		e := uint(rand.Intn(_WD))
+		h, l := bits.Mul(w, pow10(e))
+		_, l = bits.Div(h, l, _BD)
+		d[0] = Word(l)
+		benchU = d.digits()
 	}
 }

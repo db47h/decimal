@@ -30,54 +30,37 @@ const (
 // representation of 0 is the empty or nil slice (length = 0).
 type dec []Word
 
-// norm normalizes dec z by multiplying it by 10 until the most significant
-// digit is >= 1.
-//
-// Returns z with trailing zeros truncated and right shifted (in 10 base) such
-// that z % 10 = 0. Returns z and the shift amount.
+// Returns z with leading zeros truncated and left shifted (in 10 base) such
+// that the most significant digit is >= 1. Returns z and the left shift amount.
 func (z dec) norm() (dec, uint) {
-	// truncate leading zero words
-	z = z[:z.mszw()]
-	if len(z) == 0 {
-		return z, 0
+	var ls uint
+	// find first non-zero word
+	i := len(z)
+	for i > 0 && z[i-1] == 0 {
+		i--
+		ls += _WD
 	}
-
-	// find lowest non-zero word
-	exp := uint(0)
-	i := 0
-	w := Word(0)
-	for i, w = range z {
+	z = z[:i]
+	if len(z) == 0 {
+		return z, ls
+	}
+	// partial shift
+	if s := _WD - mag(uint(z[len(z)-1])); s != 0 {
+		ls += s
+		r := shl10VU(z, z, s)
+		if debugDecimal && r != 0 {
+			panic("shl10VU returned non zero carry")
+		}
+	}
+	// remove trailing zeros
+	for i, w := range z {
 		if w != 0 {
+			copy(z, z[i:])
+			z = z[:len(z)-i]
 			break
 		}
-		exp += _WD
 	}
-	if debugDecimal && i == len(z) {
-		panic("BUG: no non-zero word found")
-	}
-
-	// truncate
-	if i > 0 {
-		copy(z, z[i:])
-		z = z[:len(z)-i]
-	}
-
-	// partial shift
-	e := uint(0)
-	for x := w; x%10 == 0; x /= 10 {
-		e++
-	}
-	if e != 0 {
-		exp += e
-		r := shr10VU(z, z, e)
-		if z[len(z)-1] == 0 {
-			z = z[:len(z)-1]
-		}
-		if debugDecimal && r != 0 {
-			panic("remainder != 0 after norm")
-		}
-	}
-	return z, exp
+	return z, ls
 }
 
 // shr10 shifts z right by s decimal places. Returns
@@ -111,23 +94,21 @@ func (x dec) digit(n uint) uint {
 	return (uint(x[n]) / pow10(m)) % 10
 }
 
-// mszw returns the index of the most significant zero-word
-// such that x === x[:x.mszw()].
-func (x dec) mszw() uint {
-	i := uint(len(x))
-	for i != 0 && x[i-1] == 0 {
-		i--
-	}
-	if i == 0 {
-		return uint(len(x))
-	}
-	return i
-}
-
 func (x dec) digits() uint {
-	for msw := len(x) - 1; msw >= 0; msw-- {
-		if x[msw] != 0 {
-			return uint(msw)*_WD + decDigits(uint(x[msw]))
+	// const H = 9
+	// const P = 1000000000
+	for i, w := range x {
+		if w != 0 {
+			// TODO(db47h): is there a way to optimize this?
+			var d uint
+			// if w%P == 0 {
+			// 	w /= P
+			// 	d += H
+			// }
+			for ; w%10 != 0; w /= 10 {
+				d++
+			}
+			return uint(len(x)-i)*_WD - d
 		}
 	}
 	return 0

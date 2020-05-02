@@ -17,14 +17,26 @@ var maxDigits = [...]uint{
 	15, 15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20,
 }
 
-// decDigits returns the minimum number of decimal digits required to represent x;
-// the result is 0 for x == 0.
-func decDigits(x uint) uint {
+// mag returns the magnitude of x such that 10**(mag-1) <= x < 10**mag.
+// Returns 0 for x == 0.
+func mag(x uint) uint {
 	d := maxDigits[bits.Len(x)]
 	if x < pow10(d-1) {
 		d--
 	}
 	return d
+}
+
+// shl10VU sets z to x*(10**s), s < _WD
+func shl10VU(z, x dec, s uint) (r Word) {
+	m := pow10(s)
+	for i := 0; i < len(z) && i < len(x); i++ {
+		h, l := bits.Mul(uint(x[i]), m)
+		h, l = bits.Div(h, l, _BD)
+		z[i] = Word(l) + r
+		r = Word(h)
+	}
+	return r
 }
 
 // shr10VU sets z to x/(10**s)

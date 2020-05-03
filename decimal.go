@@ -10,7 +10,6 @@ type Decimal struct {
 	mant dec
 	exp  int32
 	prec uint32
-	dig  uint32
 	mode RoundingMode
 	acc  Accuracy
 	form form
@@ -98,7 +97,7 @@ func (x *Decimal) MinPrec() uint {
 	if x.form != finite {
 		return 0
 	}
-	return uint(x.dig)
+	return x.mant.digits()
 }
 
 // Mode returns the rounding mode of x.
@@ -146,7 +145,6 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 	if z != x {
 		z.form = x.form
 		z.neg = x.neg
-		z.dig = x.dig
 		if x.form == finite {
 			z.exp = x.exp
 			z.mant = z.mant.set(x.mant)
@@ -154,7 +152,7 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 		if z.prec == 0 {
 			z.prec = x.prec
 		} else if z.prec < x.prec {
-			z.round()
+			z.round(0)
 		}
 	}
 	return z
@@ -188,8 +186,7 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 		z.prec = umax32(prec, _WD)
 	}
 	// TODO(db47h) truncating x could be more efficient if z.prec > 0
-	// but small compared to the size of x, or if there
-	// are many trailing 0's.
+	// but small compared to the size of x, or if there are many trailing 0's.
 	z.acc = Exact
 	z.neg = x.Sign() < 0
 	if bits == 0 {
@@ -198,10 +195,8 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	}
 	// x != 0
 	exp := uint(0)
-	z.mant = z.mant.make((int(prec) + _WD - 1) / _WD).setInt(x)
-	z.mant, exp = z.mant.norm()
-	z.dig = uint32(z.mant.digits())
-	z.setExpAndRound(int64(exp) + int64(z.dig))
+	z.mant, exp = z.mant.make((int(prec) + _WD - 1) / _WD).setInt(x)
+	z.setExpAndRound(int64(exp), 0)
 	return z
 }
 
@@ -209,7 +204,7 @@ func (z *Decimal) SetInt64(x int64) *Decimal {
 	panic("not implemented")
 }
 
-func (z *Decimal) setExpAndRound(exp int64) {
+func (z *Decimal) setExpAndRound(exp int64, sbit uint) {
 	if exp < MinExp {
 		// underflow
 		z.acc = makeAcc(z.neg)
@@ -226,7 +221,7 @@ func (z *Decimal) setExpAndRound(exp int64) {
 
 	z.form = finite
 	z.exp = int32(exp)
-	z.round()
+	z.round(sbit)
 }
 
 func (z *Decimal) SetMantExp(mant *Decimal, exp int) *Decimal {
@@ -242,8 +237,35 @@ func (z *Decimal) SetMode(mode RoundingMode) *Decimal {
 	return z
 }
 
+// SetPrec sets z's precision to prec and returns the (possibly) rounded
+// value of z. Rounding occurs according to z's rounding mode if the mantissa
+// cannot be represented in prec digits without loss of precision.
+// SetPrec(0) maps all finite values to ±0; infinite values remain unchanged.
+// If prec > MaxPrec, it is set to MaxPrec.
 func (z *Decimal) SetPrec(prec uint) *Decimal {
-	panic("not implemented")
+	z.acc = Exact // optimistically assume no rounding is needed
+
+	// special case
+	if prec == 0 {
+		z.prec = 0
+		if z.form == finite {
+			// truncate z to 0
+			z.acc = makeAcc(z.neg)
+			z.form = zero
+		}
+		return z
+	}
+
+	// general case
+	if prec > MaxPrec {
+		prec = MaxPrec
+	}
+	old := z.prec
+	z.prec = uint32(prec)
+	if z.prec < old {
+		z.round(0)
+	}
+	return z
 }
 
 func (z *Decimal) SetRat(x *big.Rat) *Decimal {
@@ -314,14 +336,8 @@ func (x *Decimal) validate() {
 	if m == 0 {
 		panic("nonzero finite number with empty mantissa")
 	}
-	if x.mant[m-1] == 0 {
-		panic(fmt.Sprintf("last word of %s is zero", x.Text('e', 0)))
-	}
-	if x.mant[0]%10 == 0 {
-		panic(fmt.Sprintf("first word %d of %s is divisible by 10", x.mant[0], x.Text('e', 0)))
-	}
-	if d := uint32(x.mant.digits()); x.dig != d {
-		panic(fmt.Sprintf("digit count %d != real digit count %d for %s", x.dig, d, x.Text('e', 0)))
+	if msw := x.mant[m-1]; !(_BD/10 <= msw && msw < _BD) {
+		panic(fmt.Sprintf("last word of %s is not within [%d %d)", x.Text('e', 0), uint(_BD/10), uint(_BD)))
 	}
 	if x.prec == 0 {
 		panic("zero precision finite number")
@@ -335,8 +351,7 @@ func (x *Decimal) validate() {
 // CAUTION: The rounding modes ToNegativeInf, ToPositiveInf are affected by the
 // sign of z. For correct rounding, the sign of z must be set correctly before
 // calling round.
-func (z *Decimal) round() {
-	var sbit bool
+func (z *Decimal) round(sbit uint) {
 	if debugDecimal {
 		z.validate()
 	}
@@ -348,21 +363,39 @@ func (z *Decimal) round() {
 	}
 	// z.form == finite && len(z.mant) > 0
 	// m > 0 implies z.prec > 0 (checked by validate)
-	// m := uint32(len(z.mant)) // present mantissa length in words
-	if z.dig <= z.prec {
+	m := uint32(len(z.mant)) // present mantissa length in words
+	digits := m * _WD
+	if digits <= z.prec {
 		// mantissa fits => nothing to do
 		return
 	}
 
-	// digits > z.prec
-	// r := uint(z.digits - z.prec - 1)
-	// rd := z.mant.digit(r)
+	// digits > z.prec: mantissa too large => round
+	r := uint(digits - z.prec - 1) // rounding digit position r >= 0
+	rdigit := z.mant.digit(r)      // rounding digit
 
-	var r Word
-	z.mant, r, sbit = z.mant.shr10(uint(z.dig - z.prec))
-	z.dig = z.prec
+	if sbit == 0 && (rdigit == 0 || z.mode == ToNearestEven) {
+		// The sticky bit is only needed for rounding ToNearestEven
+		// or when the rounding bit is zero. Avoid computation otherwise.
+		sbit = z.mant.sticky(r)
+	}
+	sbit &= 1 // be safe and ensure it's a single bit	// cut off extra words
 
-	if r != 0 || sbit {
+	n := (z.prec + (_WD - 1)) / _WD // mantissa length in words for desired precision
+	if m > n {
+		copy(z.mant, z.mant[m-n:]) // move n last words to front
+		z.mant = z.mant[:n]
+	}
+
+	// determine number of trailing zero digits (ntz) and compute lsd of mantissa's least-significant word
+	ntz := uint(n*_WD - z.prec) // 0 <= ntz < _W
+	lsd := pow10(ntz)
+
+	// round if result is inexact
+	if rdigit|sbit != 0 {
+		// Make rounding decision: The result mantissa is truncated ("rounded down")
+		// by default. Decide if we need to increment, or "round up", the (unsigned)
+		// mantissa.
 		inc := false
 		switch z.mode {
 		case ToNegativeInf:
@@ -370,9 +403,9 @@ func (z *Decimal) round() {
 		case ToZero:
 			// nothing to do
 		case ToNearestEven:
-			inc = r > 5 || (r == 5 && (sbit || z.mant[0]&1 != 0))
+			inc = rdigit > 5 || (rdigit == 5 && (sbit != 0 || z.mant.digit(ntz)&1 != 0))
 		case ToNearestAway:
-			inc = r >= 5
+			inc = rdigit >= 5
 		case AwayFromZero:
 			inc = true
 		case ToPositiveInf:
@@ -383,11 +416,24 @@ func (z *Decimal) round() {
 		z.acc = makeAcc(inc != z.neg)
 		if inc {
 			// add 1 to mantissa
-			if add10VW(z.mant, z.mant, 1) != 0 {
-
+			if add10VW(z.mant, z.mant, Word(lsd)) != 0 {
+				// mantissa overflow => adjust exponent
+				if z.exp >= MaxExp {
+					// exponent overflow
+					z.form = inf
+					return
+				}
+				z.exp++
+				// mantissa overflow means that the mantissa before increment
+				// was all nines. In that case, the result is 1**(z.exp+1)
+				z.mant[n-1] = _BD / 10
 			}
 		}
 	}
+
+	// zero out trailing digits in least-significant word
+	z.mant[0] -= z.mant[0] % Word(lsd)
+
 	if debugDecimal {
 		z.validate()
 	}

@@ -51,17 +51,80 @@ func shr10VU(z, x dec, s uint) (r Word) {
 	return r
 }
 
-// The resulting carry c is either 0 or 1.
-func add10VW(z, x []Word, y Word) (c Word) {
-	c = y
-	for i := 0; i < len(z) && i < len(x); i++ {
-		zi, cc := bits.Add(uint(x[i]), uint(c), 0)
-		if zi >= _BD {
-			zi -= _BD
-			c = 1
-		}
-		z[i] = Word(zi)
-		c = Word(cc)
+func decTrailingZeros(n uint) uint {
+	if bits.UintSize == 32 {
+		return dec32TrailingZeros(n)
 	}
-	return
+	return dec64TrailingZeros(uint64(n))
+}
+
+func dec32TrailingZeros(n uint) uint {
+	var d uint
+	if n%100000000 == 0 {
+		n /= 100000000
+		d += 8
+	}
+	if n%10000 == 0 {
+		n /= 10000
+		d += 4
+	}
+	if n%100 == 0 {
+		n /= 100
+		d += 2
+	}
+	if n%10 == 0 {
+		d += 1
+	}
+	return d
+}
+
+func dec64TrailingZeros(n uint64) uint {
+	var d uint
+	if n%10000000000000000 == 0 {
+		n /= 10000000000000000
+		d += 16
+	}
+	if n%100000000 == 0 {
+		n /= 100000000
+		d += 8
+	}
+	if n%10000 == 0 {
+		n /= 10000
+		d += 4
+	}
+	if n%100 == 0 {
+		n /= 100
+		d += 2
+	}
+	if n%10 == 0 {
+		d += 1
+	}
+	return d
+}
+
+// addW adds y to x. The resulting carry c is either 0 or 1.
+func add10VW(z, x dec, y Word) (c Word) {
+	s := x[0] + y
+	if (s < y) || s >= _BD {
+		z[0] = s - _BD
+		c = 1
+	} else {
+		z[0] = s
+	}
+	// propagate carry
+	for i := 1; i < len(z) && i < len(x); i++ {
+		s = x[i] + c
+		if s == _BD {
+			z[i] = 0
+			continue
+		}
+		// c = 0 from this point
+		z[i] = s
+		// copy remaining digits if not adding in-place
+		if !same(z, x) {
+			copy(z[i+1:], x[i+1:])
+		}
+		return 0
+	}
+	return c
 }

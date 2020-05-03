@@ -3,10 +3,13 @@
 package decimal
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"math/bits"
+	"strconv"
 )
 
 // MaxBase is the largest number base accepted for string conversions.
@@ -114,15 +117,118 @@ func umax32(x, y uint32) uint32 {
 }
 
 // q = (u1<<_W + u0 - r)/v
-func divWW_g(u1, u0, v big.Word) (q, r big.Word) {
+func divWW(u1, u0, v big.Word) (q, r big.Word) {
 	qq, rr := bits.Div(uint(u1), uint(u0), uint(v))
 	return big.Word(qq), big.Word(rr)
 }
 
-func divWVW_g(z []big.Word, xn big.Word, x []big.Word, y big.Word) (r big.Word) {
+func divWVW(z []big.Word, xn big.Word, x []big.Word, y big.Word) (r big.Word) {
 	r = xn
 	for i := len(z) - 1; i >= 0; i-- {
-		z[i], r = divWW_g(r, x[i], y)
+		z[i], r = divWW(r, x[i], y)
 	}
 	return r
+}
+
+func same(x, y []Word) bool {
+	return len(x) == len(y) && len(x) > 0 && &x[0] == &y[0]
+}
+
+// scan errors
+var (
+	errNoDigits = errors.New("number has no digits")
+	errInvalSep = errors.New("'_' must separate successive digits")
+)
+
+func scanSign(r io.ByteScanner) (neg bool, err error) {
+	var ch byte
+	if ch, err = r.ReadByte(); err != nil {
+		return false, err
+	}
+	switch ch {
+	case '-':
+		neg = true
+	case '+':
+		// nothing to do
+	default:
+		r.UnreadByte()
+	}
+	return
+}
+
+func scanExponent(r io.ByteScanner, base2ok, sepOk bool) (exp int64, base int, err error) {
+	// one char look-ahead
+	ch, err := r.ReadByte()
+	if err != nil {
+		if err == io.EOF {
+			err = nil
+		}
+		return 0, 10, err
+	}
+
+	// exponent char
+	switch ch {
+	case 'e', 'E':
+		base = 10
+	case 'p', 'P':
+		if base2ok {
+			base = 2
+			break // ok
+		}
+		fallthrough // binary exponent not permitted
+	default:
+		r.UnreadByte() // ch does not belong to exponent anymore
+		return 0, 10, nil
+	}
+
+	// sign
+	var digits []byte
+	ch, err = r.ReadByte()
+	if err == nil && (ch == '+' || ch == '-') {
+		if ch == '-' {
+			digits = append(digits, '-')
+		}
+		ch, err = r.ReadByte()
+	}
+
+	// prev encodes the previously seen char: it is one
+	// of '_', '0' (a digit), or '.' (anything else). A
+	// valid separator '_' may only occur after a digit.
+	prev := '.'
+	invalSep := false
+
+	// exponent value
+	hasDigits := false
+	for err == nil {
+		if '0' <= ch && ch <= '9' {
+			digits = append(digits, ch)
+			prev = '0'
+			hasDigits = true
+		} else if ch == '_' && sepOk {
+			if prev != '0' {
+				invalSep = true
+			}
+			prev = '_'
+		} else {
+			r.UnreadByte() // ch does not belong to number anymore
+			break
+		}
+		ch, err = r.ReadByte()
+	}
+
+	if err == io.EOF {
+		err = nil
+	}
+	if err == nil && !hasDigits {
+		err = errNoDigits
+	}
+	if err == nil {
+		exp, err = strconv.ParseInt(string(digits), 10, 64)
+	}
+	// other errors take precedence over invalid separators
+	if err == nil && (invalSep || prev == '_') {
+		err = errInvalSep
+	}
+
+	return
 }

@@ -25,7 +25,124 @@ func (z *Decimal) SetString(s string) (*Decimal, bool) {
 // as the implementation of Parse. It does not recognize ±Inf and does not expect
 // EOF at the end.
 func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error) {
-	panic("not implemented")
+	prec := z.prec
+	if prec == 0 {
+		prec = _WD
+	}
+
+	// A reasonable value in case of an error.
+	z.form = zero
+
+	// sign
+	z.neg, err = scanSign(r)
+	if err != nil {
+		return
+	}
+
+	// mantissa
+	var fcount int // fractional digit count; valid if <= 0
+	z.mant, b, fcount, err = z.mant.scan(r, base, true)
+	if err != nil {
+		return
+	}
+
+	// exponent
+	var exp int64
+	var ebase int
+	exp, ebase, err = scanExponent(r, true, base == 0)
+	if err != nil {
+		return
+	}
+
+	// special-case 0
+	if len(z.mant) == 0 {
+		z.prec = prec
+		z.acc = Exact
+		z.form = zero
+		f = z
+		return
+	}
+	// len(z.mant) > 0
+
+	// The mantissa may have a radix point (fcount <= 0) and there
+	// may be a nonzero exponent exp. The radix point amounts to a
+	// division by b**(-fcount). An exponent means multiplication by
+	// ebase**exp. Finally, mantissa normalization (shift left) requires
+	// a correcting multiplication by 2**(-shiftcount). Multiplications
+	// are commutative, so we can apply them in any order as long as there
+	// is no loss of precision. We only have powers of 2 and 10, and
+	// we split powers of 10 into the product of the same powers of
+	// 2 and 5. This reduces the size of the multiplication factor
+	// needed for base-10 exponents.
+
+	panic("adjust exponent needed")
+
+	// normalize mantissa and determine initial exponent contributions
+	// exp2 := int64(len(z.mant))*_W - fnorm(z.mant)
+	exp2 := int64(0)
+	exp5 := int64(0)
+
+	// determine binary or decimal exponent contribution of radix point
+	if fcount < 0 {
+		// The mantissa has a radix point ddd.dddd; and
+		// -fcount is the number of digits to the right
+		// of '.'. Adjust relevant exponent accordingly.
+		d := int64(fcount)
+		switch b {
+		case 10:
+			exp5 = d
+			fallthrough // 10**e == 5**e * 2**e
+		case 2:
+			exp2 += d
+		case 8:
+			exp2 += d * 3 // octal digits are 3 bits each
+		case 16:
+			exp2 += d * 4 // hexadecimal digits are 4 bits each
+		default:
+			panic("unexpected mantissa base")
+		}
+		// fcount consumed - not needed anymore
+	}
+
+	// take actual exponent into account
+	switch ebase {
+	case 10:
+		exp5 += exp
+		fallthrough // see fallthrough above
+	case 2:
+		exp2 += exp
+	default:
+		panic("unexpected exponent base")
+	}
+	// exp consumed - not needed anymore
+
+	// apply 2**exp2
+	if MinExp <= exp2 && exp2 <= MaxExp {
+		z.prec = prec
+		z.form = finite
+		z.exp = int32(exp2)
+		f = z
+	} else {
+		err = fmt.Errorf("exponent overflow")
+		return
+	}
+
+	if exp5 == 0 {
+		// no decimal exponent contribution
+		z.round(0)
+		return
+	}
+	// exp5 != 0
+
+	// // apply 5**exp5
+	// p := new(Decimal).SetPrec(z.Prec() + _WD) // use more bits for p -- TODO(gri) what is the right number?
+	// if exp5 < 0 {
+	// 	z.Quo(z, p.pow5(uint64(-exp5)))
+	// } else {
+	// 	z.Mul(z, p.pow5(uint64(exp5)))
+	// }
+
+	return
 }
 
 // Parse parses s which must contain a text representation of a floating- point

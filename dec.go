@@ -2,6 +2,7 @@ package decimal
 
 import (
 	"math/big"
+	"math/bits"
 	"sync"
 )
 
@@ -42,7 +43,7 @@ func (z dec) norm() (dec, uint) {
 	}
 	z = z[:i]
 	if len(z) == 0 {
-		return z, ls
+		return z, 0
 	}
 	// partial shift
 	if s := _WD - mag(uint(z[len(z)-1])); s != 0 {
@@ -89,29 +90,22 @@ func (z dec) shr10(s uint) (d dec, r Word, tnz bool) {
 	return z, r, tnz || m != 0
 }
 
-func (x dec) digit(n uint) uint {
-	n, m := n/_WD, n%_WD
-	return (uint(x[n]) / pow10(m)) % 10
-}
-
 func (x dec) digits() uint {
-	// const H = 9
-	// const P = 1000000000
 	for i, w := range x {
 		if w != 0 {
-			// TODO(db47h): is there a way to optimize this?
-			var d uint
-			// if w%P == 0 {
-			// 	w /= P
-			// 	d += H
-			// }
-			for ; w%10 != 0; w /= 10 {
-				d++
-			}
-			return uint(len(x)-i)*_WD - d
+			return uint(len(x)-i)*_WD - decTrailingZeros(uint(w))
 		}
 	}
 	return 0
+}
+
+func (x dec) digit(i uint) uint {
+	j, i := bits.Div(0, i, _WD)
+	if j >= uint(len(x)) {
+		return 0
+	}
+	// 0 <= j < len(x)
+	return (uint(x[j]) / pow10(i)) % 10
 }
 
 func (z dec) set(x dec) dec {
@@ -134,19 +128,39 @@ func (z dec) make(n int) dec {
 	return make(dec, n, n+e)
 }
 
-func (z dec) setInt(x *big.Int) dec {
+// setInt sets z such that z*10**exp = x with 0 < z <= 1.
+// Returns z and exp.
+func (z dec) setInt(x *big.Int) (dec, uint) {
 	b := new(big.Int).Set(x).Bits()
-	n := len(b)
-	i := 0
-	for ; n > 0; i++ {
-		z[i] = Word(divWVW_g(b, 0, b, big.Word(_BD)))
-		n = len(b)
-		for n > 0 && b[n-1] == 0 {
-			n--
-		}
-		b = b[0:n]
+	var i int
+	for i = 0; i < len(z) && len(b) > 0; i++ {
+		z[i] = Word(divWVW(b, 0, b, big.Word(_BD)))
 	}
-	return z[:i]
+	z = z[:i]
+	z, s := z.norm()
+	return z, uint(i)*_WD - s
+}
+
+// sticky returns 1 if there's a non zero digit within the
+// i least significant digits, otherwise it returns 0.
+func (x dec) sticky(i uint) uint {
+	j, i := bits.Div(0, i, _WD)
+	if j >= uint(len(x)) {
+		if len(x) == 0 {
+			return 0
+		}
+		return 1
+	}
+	// 0 <= j < len(x)
+	for _, x := range x[:j] {
+		if x != 0 {
+			return 1
+		}
+	}
+	if uint(x[j])%pow10(i) != 0 {
+		return 1
+	}
+	return 0
 }
 
 // getDec returns a *dec of len n. The contents may not be zero.

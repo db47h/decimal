@@ -48,8 +48,8 @@ func TestDnorm(t *testing.T) {
 		dd := dec{}.set(d)
 		s := dnorm(dd)
 		// d should now have a single element with e shifted left
-		ew := w * pow10(_WD-mag(w))
-		es := int64(uint(len(d)*_WD) - (mag(w) + e))
+		ew := w * pow10(_WD-decDigits(w))
+		es := int64(uint(len(d)*_WD) - (decDigits(w) + e))
 		if dd[len(dd)-1] != Word(ew) || s != es {
 			t.Fatalf("%ve%v => dnorm(%v) = %v, %v --- Expected %d, %d",
 				w, e, d, dd, s, w, es)

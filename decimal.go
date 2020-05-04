@@ -97,7 +97,7 @@ func (x *Decimal) MinPrec() uint {
 	if x.form != finite {
 		return 0
 	}
-	return x.mant.digits()
+	return uint(len(x.mant))*_WD - x.mant.ntz()
 }
 
 // Mode returns the rounding mode of x.
@@ -446,7 +446,7 @@ func dnorm(m dec) int64 {
 	if debugDecimal && (len(m) == 0 || m[len(m)-1] == 0) {
 		panic("msw of mantissa is 0")
 	}
-	s := _WD - mag(uint(m[len(m)-1]))
+	s := _WD - decDigits(uint(m[len(m)-1]))
 	// partial shift
 	if s > 0 {
 		c := shl10VU(m, m, s)

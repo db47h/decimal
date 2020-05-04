@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
-func Test_dec_digits(t *testing.T) {
+func TestDec_ntz(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
 	again:
 		w := uint(rand.Uint64()) % _BD
-		// ignore anything divisible by ten since mag(10) = 2 but dec{100000000...}.digits() = 1
+		// TODO: WTF? ignore anything divisible by ten since decDigits(10) = 2 but dec{100000000...}.digits() = 1
 		if w%10 == 0 {
 			goto again
 		}
@@ -22,9 +22,8 @@ func Test_dec_digits(t *testing.T) {
 		h, l := bits.Mul(w, pow10(e))
 		h, l = bits.Div(h, l, _BD)
 		d := dec{Word(l), Word(h)}.norm()
-		dnorm(d)
-		if d.digits() != mag(w) {
-			t.Fatalf("dec{%d}.digits() = %d, expected %d", d[0], d.digits(), mag(w))
+		if d.ntz() != e {
+			t.Fatalf("dec{%v}.digits() = %d, expected %d", d, d.ntz(), e)
 		}
 	}
 }
@@ -37,7 +36,7 @@ func Test_mag(t *testing.T) {
 		for m := n; m != 0; m /= 10 {
 			d++
 		}
-		if dd := mag(n); dd != d {
+		if dd := decDigits(n); dd != d {
 			t.Fatalf("mag(%d) = %d, expected %d", n, dd, d)
 		}
 	}
@@ -124,7 +123,7 @@ var (
 func Benchmark_mag(b *testing.B) {
 	rand.Seed(0xdeadbeefbadf00d)
 	for i := 0; i < b.N; i++ {
-		benchU = mag(uint(rand.Uint64()) % _BD)
+		benchU = decDigits(uint(rand.Uint64()) % _BD)
 	}
 }
 

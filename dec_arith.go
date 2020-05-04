@@ -19,14 +19,15 @@ var maxDigits = [...]uint{
 	15, 15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20,
 }
 
-// mag returns the magnitude of x such that 10**(mag-1) <= x < 10**mag.
+// decDigits returns n such that of x such that 10**(n-1) <= x < 10**n.
+// In other words, n the number of digits required to represent n.
 // Returns 0 for x == 0.
-func mag(x uint) uint {
-	d := maxDigits[bits.Len(x)]
-	if x < pow10(d-1) {
-		d--
+func decDigits(x uint) (n uint) {
+	n = maxDigits[bits.Len(x)]
+	if x < pow10(n-1) {
+		n--
 	}
-	return d
+	return n
 }
 
 // shl10VU sets z to x*(10**s), s < _WD

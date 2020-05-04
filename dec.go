@@ -45,11 +45,18 @@ func (z dec) norm() dec {
 	return z[0:i]
 }
 
-// TODO(db47h): change this to retun # of trailing zeroes.
+// digits returns the number of digits of x.
 func (x dec) digits() uint {
+	if i := len(x) - 1; i >= 0 {
+		return uint(i*_W) + decDigits(uint(x[i]))
+	}
+	return 0
+}
+
+func (x dec) ntz() uint {
 	for i, w := range x {
 		if w != 0 {
-			return uint(len(x)-i)*_WD - decTrailingZeros(uint(w))
+			return uint(i)*_WD + decTrailingZeros(uint(w))
 		}
 	}
 	return 0

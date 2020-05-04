@@ -194,9 +194,9 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 		return z
 	}
 	// x != 0
-	exp := uint(0)
-	z.mant, exp = z.mant.make((int(prec) + _WD - 1) / _WD).setInt(x)
-	z.setExpAndRound(int64(exp), 0)
+	z.mant = z.mant.make((int(prec) + _WD - 1) / _WD).setInt(x)
+	exp := dnorm(z.mant)
+	z.setExpAndRound(int64(len(z.mant))*_WD-exp, 0)
 	return z
 }
 

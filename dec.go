@@ -93,9 +93,8 @@ func (z dec) setWord(x Word) dec {
 	return z
 }
 
-// setInt sets z such that z*10**exp = x with 0 < z <= 1.
-// Returns z and exp.
-func (z dec) setInt(x *big.Int) (dec, uint) {
+// setInt sets z = x.mant
+func (z dec) setInt(x *big.Int) dec {
 	bb := x.Bits()
 	// TODO(db47h): here we cannot directly copy(b, bb)
 	b := make([]Word, len(bb))
@@ -107,11 +106,7 @@ func (z dec) setInt(x *big.Int) (dec, uint) {
 		z[i] = Word(divWVW(b, 0, b, _BD))
 	}
 	z = z.norm()
-	if len(z) == 0 {
-		return z, 0
-	}
-	s := dnorm(z)
-	return z, uint(len(z))*_WD - uint(s)
+	return z
 }
 
 // sticky returns 1 if there's a non zero digit within the

@@ -1,7 +1,6 @@
 package decimal
 
 import (
-	"math/big"
 	"math/bits"
 	"math/rand"
 	"reflect"
@@ -46,11 +45,11 @@ func Test_mag(t *testing.T) {
 
 // TODO(db47h): remove this function
 func Test_dec_setInt(t *testing.T) {
-	// TODO(db47h): next step
-	b, _ := new(big.Int).SetString("12345678901234567890", 0)
-	d, exp := dec{}.make(3).setInt(b)
-	t.Log(d, exp)
-	t.Log(string(dtoa(d, 10)))
+	// // TODO(db47h): next step
+	// b, _ := new(big.Int).SetString("12345678901234567890", 0)
+	// d, exp := dec{}.make(3).setInt(b)
+	// t.Log(d, exp)
+	// t.Log(string(dtoa(d, 10)))
 }
 
 func Test_add10VW(t *testing.T) {

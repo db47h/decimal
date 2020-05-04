@@ -98,7 +98,7 @@ func (z dec) scan(r io.ByteScanner, base int, fracOk bool) (res dec, b, count in
 				d1 = MaxBase + 1
 			}
 			if d1 >= b1 {
-				r.UnreadByte() // ch does not belong to number anymore
+				err = r.UnreadByte() // ch does not belong to number anymore
 				break
 			}
 			prev = '0'

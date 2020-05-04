@@ -438,3 +438,21 @@ func (z *Decimal) round(sbit uint) {
 		z.validate()
 	}
 }
+
+// dnorm normalizes mantissa m by shifting it to the left
+// such that the msd of the most-significant word (msw) is != 0.
+// It returns the shift amount. It assumes that len(m) != 0.
+func dnorm(m dec) int64 {
+	if debugDecimal && (len(m) == 0 || m[len(m)-1] == 0) {
+		panic("msw of mantissa is 0")
+	}
+	s := _WD - mag(uint(m[len(m)-1]))
+	// partial shift
+	if s > 0 {
+		c := shl10VU(m, m, s)
+		if debugDecimal && c != 0 {
+			panic("nlz or shlVU incorrect")
+		}
+	}
+	return int64(s)
+}

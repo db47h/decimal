@@ -1,36 +1,14 @@
 package decimal
 
 import (
-	"bytes"
 	"math/big"
 	"math/bits"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
 )
-
-func Test_dec_norm(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < 10000; i++ {
-		w := uint(rand.Uint64()) % _BD
-		e := uint(rand.Intn(_WD + 1))
-		h, l := bits.Mul(w, pow10(e))
-		// convert h, l from base _B (2**64) to base _BD (10**19) or 2**32 -> 10**9
-		h, l = bits.Div(h, l, _BD)
-		d, s := dec{0, Word(l), Word(h), 0}.norm()
-		// d should now have a single element with e shifted left
-		ew := w * pow10(_WD-mag(w))
-		// expected shift
-		// _WD :   _WD  :  _WD  : ...
-		// _WD : S + mag(w) + e : ...
-		es := _WD*2 - (mag(w) + e) + _WD
-		if len(d) > 1 || d[0] != Word(ew) || s != es {
-			t.Fatalf("%ve%v => dec{0, %v, %v, 0}.norm() = %v, %v --- Expected [%d], %d",
-				w, e, l, h, d, s, w, es)
-		}
-	}
-}
 
 func Test_dec_digits(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
@@ -44,7 +22,8 @@ func Test_dec_digits(t *testing.T) {
 		e := uint(rand.Intn(_WD + 1))
 		h, l := bits.Mul(w, pow10(e))
 		h, l = bits.Div(h, l, _BD)
-		d, _ := dec{Word(l), Word(h)}.norm()
+		d := dec{Word(l), Word(h)}.norm()
+		dnorm(d)
 		if d.digits() != mag(w) {
 			t.Fatalf("dec{%d}.digits() = %d, expected %d", d[0], d.digits(), mag(w))
 		}
@@ -65,40 +44,13 @@ func Test_mag(t *testing.T) {
 	}
 }
 
+// TODO(db47h): remove this function
 func Test_dec_setInt(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < 1000; i++ {
-		ns := make([]byte, rand.Intn(100)+1)
-		for i := 0; i < len(ns); i++ {
-			ns[i] = '0' + byte(rand.Intn(10))
-		}
-		b, _ := new(big.Int).SetString(string(ns), 10)
-		// remove trailing 0s
-		ns = bytes.TrimLeft(ns, "0")
-		prec := uint32(float64(b.BitLen())/ln2_10) + 1
-		d, exp := dec{}.make((int(prec) + _WD - 1) / _WD).setInt(b)
-		if exp != uint(len(ns)) {
-			t.Fatalf("%s -> %v. Expected exponent %d, got %d.", ns, d, len(ns), exp)
-		}
-		b2 := new(big.Int)
-		bd := new(big.Int).SetUint64(_BD)
-		x := new(big.Int)
-		for i := len(d) - 1; i >= 0; i-- {
-			b2.Mul(b2, bd).Add(b2, x.SetUint64(uint64(d[i])))
-		}
-		shr := len(d)*_WD - int(exp)
-		if shr > 0 {
-			b2.Div(b2, x.SetUint64(uint64(pow10(uint(shr)))))
-		} else {
-			b2.Mul(b2, x.SetUint64(uint64(pow10(uint(-shr)))))
-		}
-		if b.Cmp(b2) != 0 {
-			t.Fatalf("Got %s -> %v x 10**%d. Bad conversion back to Int: %s", b, d, exp, b2)
-		}
-	}
-	b, _ := new(big.Int).SetString("12345678901234567890000000000000000000", 0)
+	// TODO(db47h): next step
+	b, _ := new(big.Int).SetString("12345678901234567890", 0)
 	d, exp := dec{}.make(3).setInt(b)
 	t.Log(d, exp)
+	t.Log(string(dtoa(d, 10)))
 }
 
 func Test_add10VW(t *testing.T) {
@@ -107,28 +59,22 @@ func Test_add10VW(t *testing.T) {
 		x Word
 		o dec
 		c Word
-		s uint
+		s int64
 	}{
-		{dec{_BD - 2, _BD - 1}, 2, nil, 1, 0},
+		{dec{_BD - 2, _BD - 1}, 2, dec{}, 1, 0},
 		{dec{_BD - 2, _BD - 1}, 1, dec{_BD - 1, _BD - 1}, 0, 0},
-		{dec{_BD - 2, _BD - 2}, 2, dec{_BD - 1}, 0, 0},
+		{dec{_BD - 2, _BD - 2}, 2, dec{0, _BD - 1}, 0, 0},
 	}
 	for i, d := range td {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			z := d.i
 			c := add10VW(z, z, d.x)
-			z, s := z.norm()
-			ok := true
-			if len(z) != len(d.o) {
-				ok = false
-			} else {
-				for i := 0; i < len(z) && i < len(d.o); i++ {
-					if z[i] != d.o[i] {
-						ok = false
-					}
-				}
+			var s int64
+			z = z.norm()
+			if len(z) > 0 {
+				s = dnorm(z)
 			}
-			if !ok || s != d.s || c != d.c {
+			if !reflect.DeepEqual(z, d.o) || s != d.s || c != d.c {
 				t.Fatalf("addW failed: expected z = %v, s = %d, c = %d, got d = %v, s = %v, c = %v", d.o, d.s, d.c, z, s, c)
 			}
 
@@ -163,18 +109,18 @@ var (
 	benchU uint
 )
 
-func Benchmark_dec_norm(b *testing.B) {
-	rand.Seed(0xdeadbeefbadf00d)
-	d := dec{}.make(10000)
-	for i := range d {
-		d[i] = Word(rand.Uint64()) % _BD
-	}
-	for i := 0; i < b.N; i++ {
-		d[0] = Word(rand.Uint64()) % _BD
-		d[len(d)-1] = Word(rand.Uint64()) % _BD
-		benchD, benchU = d.norm()
-	}
-}
+// func Benchmark_dnorm(b *testing.B) {
+// 	rand.Seed(0xdeadbeefbadf00d)
+// 	d := dec{}.make(10000)
+// 	for i := range d {
+// 		d[i] = Word(rand.Uint64()) % _BD
+// 	}
+// 	for i := 0; i < b.N; i++ {
+// 		d[0] = Word(rand.Uint64()) % _BD
+// 		d[len(d)-1] = Word(rand.Uint64()) % _BD
+// 		benchD, benchU = d.dnorm()
+// 	}
+// }
 
 func Benchmark_mag(b *testing.B) {
 	rand.Seed(0xdeadbeefbadf00d)

@@ -31,65 +31,21 @@ const (
 // representation of 0 is the empty or nil slice (length = 0).
 type dec []Word
 
-// Returns z with leading zeros truncated and left shifted (in 10 base) such
-// that the most significant digit is >= 1. Returns z and the left shift amount.
-func (z dec) norm() (dec, uint) {
-	var ls uint
-	// find first non-zero word
+func (z dec) clear() {
+	for i := range z {
+		z[i] = 0
+	}
+}
+
+func (z dec) norm() dec {
 	i := len(z)
 	for i > 0 && z[i-1] == 0 {
 		i--
-		ls += _WD
 	}
-	z = z[:i]
-	if len(z) == 0 {
-		return z, 0
-	}
-	// partial shift
-	if s := _WD - mag(uint(z[len(z)-1])); s != 0 {
-		ls += s
-		r := shl10VU(z, z, s)
-		if debugDecimal && r != 0 {
-			panic("shl10VU returned non zero carry")
-		}
-	}
-	// remove trailing zeros
-	for i, w := range z {
-		if w != 0 {
-			copy(z, z[i:])
-			z = z[:len(z)-i]
-			break
-		}
-	}
-	return z, ls
+	return z[0:i]
 }
 
-// shr10 shifts z right by s decimal places. Returns
-// z and the most significant digit removed and a boolean
-// indicating if there were any non-zero digits following r
-func (z dec) shr10(s uint) (d dec, r Word, tnz bool) {
-	nw, s := s/_WD, s%_WD
-	if nw > 0 {
-		// save rounding digit
-		r = z[nw-1]
-		for _, w := range z[:nw-1] {
-			tnz = tnz || w != 0
-		}
-		copy(z, z[nw:])
-		z = z[:len(z)-int(nw)]
-	}
-	if s == 0 {
-		r, m := r/(_BD-1), r%(_BD-1)
-		return z, r, m != 0
-	}
-	tnz = tnz || r != 0
-	// shift right by 0 < s < _WD
-	r = shr10VU(z, z, s)
-	p := Word(pow10(s - 1))
-	r, m := r/p, r%p
-	return z, r, tnz || m != 0
-}
-
+// TODO(db47h): change this to retun # of trailing zeroes.
 func (x dec) digits() uint {
 	for i, w := range x {
 		if w != 0 {
@@ -108,12 +64,6 @@ func (x dec) digit(i uint) uint {
 	return (uint(x[j]) / pow10(i)) % 10
 }
 
-func (z dec) set(x dec) dec {
-	z = z.make(len(x))
-	copy(z, x)
-	return z
-}
-
 func (z dec) make(n int) dec {
 	if n <= cap(z) {
 		return z[:n] // reuse z
@@ -128,17 +78,40 @@ func (z dec) make(n int) dec {
 	return make(dec, n, n+e)
 }
 
+func (z dec) set(x dec) dec {
+	z = z.make(len(x))
+	copy(z, x)
+	return z
+}
+
+func (z dec) setWord(x Word) dec {
+	if x == 0 {
+		return z[:0]
+	}
+	z = z.make(1)
+	z[0] = x
+	return z
+}
+
 // setInt sets z such that z*10**exp = x with 0 < z <= 1.
 // Returns z and exp.
 func (z dec) setInt(x *big.Int) (dec, uint) {
-	b := new(big.Int).Set(x).Bits()
-	var i int
-	for i = 0; i < len(z) && len(b) > 0; i++ {
-		z[i] = Word(divWVW(b, 0, b, big.Word(_BD)))
+	bb := x.Bits()
+	// TODO(db47h): here we cannot directly copy(b, bb)
+	b := make([]Word, len(bb))
+	for i := 0; i < len(b) && i < len(bb); i++ {
+		b[i] = Word(bb[i])
 	}
-	z = z[:i]
-	z, s := z.norm()
-	return z, uint(i)*_WD - s
+	var i int
+	for i = 0; i < len(z); i++ {
+		z[i] = Word(divWVW(b, 0, b, _BD))
+	}
+	z = z.norm()
+	if len(z) == 0 {
+		return z, 0
+	}
+	s := dnorm(z)
+	return z, uint(len(z))*_WD - uint(s)
 }
 
 // sticky returns 1 if there's a non zero digit within the
@@ -161,6 +134,64 @@ func (x dec) sticky(i uint) uint {
 		return 1
 	}
 	return 0
+}
+
+// q = (x-r)/y, with 0 <= r < y
+func (z dec) divW(x dec, y Word) (q dec, r Word) {
+	m := len(x)
+	switch {
+	case y == 0:
+		panic("division by zero")
+	case y == 1:
+		q = z.set(x) // result is x
+		return
+	case m == 0:
+		q = z[:0] // result is 0
+		return
+	}
+	// m > 0
+	z = z.make(m)
+	r = div10WVW(z, 0, x, y)
+	q = z.norm()
+	return
+}
+
+func (z dec) mulAddWW(x dec, y, r Word) dec {
+	m := len(x)
+	if m == 0 || y == 0 {
+		return z.setWord(r) // result is r
+	}
+	// m > 0
+
+	z = z.make(m + 1)
+	z[m] = mulAdd10VWW(z[0:m], x, y, r)
+
+	return z.norm()
+}
+
+// z = x * 10**s
+func (z dec) shl(x dec, s uint) dec {
+	if s == 0 {
+		if same(z, x) {
+			return z
+		}
+		if !alias(z, x) {
+			return z.set(x)
+		}
+	}
+
+	m := len(x)
+	if m == 0 {
+		return z[:0]
+	}
+	// m > 0
+
+	n := m + int(s/_WD)
+	z = z.make(n + 1)
+	z[n] = shl10VU(z[n-m:n], x, s%_WD)
+	z[0 : n-m].clear()
+
+	return z.norm()
 }
 
 // getDec returns a *dec of len n. The contents may not be zero.

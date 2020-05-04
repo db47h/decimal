@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"math/bits"
 	"strconv"
 )
 
+const digits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 // MaxBase is the largest number base accepted for string conversions.
 const MaxBase = 10 + ('z' - 'a' + 1) + ('Z' - 'A' + 1)
+const maxBaseSmall = 10 + ('z' - 'a' + 1)
 
 // Exponent and precision limits.
 const (
@@ -117,12 +119,12 @@ func umax32(x, y uint32) uint32 {
 }
 
 // q = (u1<<_W + u0 - r)/v
-func divWW(u1, u0, v big.Word) (q, r big.Word) {
+func divWW(u1, u0, v Word) (q, r Word) {
 	qq, rr := bits.Div(uint(u1), uint(u0), uint(v))
-	return big.Word(qq), big.Word(rr)
+	return Word(qq), Word(rr)
 }
 
-func divWVW(z []big.Word, xn big.Word, x []big.Word, y big.Word) (r big.Word) {
+func divWVW(z []Word, xn Word, x []Word, y Word) (r Word) {
 	r = xn
 	for i := len(z) - 1; i >= 0; i-- {
 		z[i], r = divWW(r, x[i], y)
@@ -130,8 +132,20 @@ func divWVW(z []big.Word, xn big.Word, x []big.Word, y big.Word) (r big.Word) {
 	return r
 }
 
+// z1<<_W + z0 = x*y + c
+func mulAddWWW(x, y, c Word) (z1, z0 Word) {
+	hi, lo := bits.Mul(uint(x), uint(y))
+	var cc uint
+	lo, cc = bits.Add(lo, uint(c), 0)
+	return Word(hi + cc), Word(lo)
+}
+
 func same(x, y []Word) bool {
 	return len(x) == len(y) && len(x) > 0 && &x[0] == &y[0]
+}
+
+func alias(x, y []Word) bool {
+	return cap(x) > 0 && cap(y) > 0 && &x[0:cap(x)][cap(x)-1] == &y[0:cap(y)][cap(y)-1]
 }
 
 // scan errors
@@ -230,5 +244,21 @@ func scanExponent(r io.ByteScanner, base2ok, sepOk bool) (exp int64, base int, e
 		err = errInvalSep
 	}
 
+	return
+}
+
+// pow returns x**n for n > 0, and 1 otherwise.
+func pow(x Word, n int) (p Word) {
+	// n == sum of bi * 2**i, for 0 <= i < imax, and bi is 0 or 1
+	// thus x**n == product of x**(2**i) for all i where bi == 1
+	// (Russian Peasant Method for exponentiation)
+	p = 1
+	for n > 0 {
+		if n&1 != 0 {
+			p *= x
+		}
+		x *= x
+		n >>= 1
+	}
 	return
 }

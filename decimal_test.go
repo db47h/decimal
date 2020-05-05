@@ -19,7 +19,7 @@ var intData = []struct {
 	e  int32
 }{
 	{"00000000000000000001232", 10, 0, dec{1232000000000000000}, 19, 4},
-	{"1234567890123456789_0123456789012345678_9012345678901234567_8901234567890123456_78901234567890", 0, 0,
+	{"1234567890123456789_0123456789012345678_9012345678901234567_8901234567890123456_78901234567890", 0, 90,
 		dec{7890123456789000000, 8901234567890123456, 9012345678901234567, 123456789012345678, 1234567890123456789},
 		90, 90},
 	{"1235", 0, 0, dec{1235000000000000000}, _WD, 4},
@@ -76,20 +76,20 @@ func TestDecimal_SetInt(t *testing.T) {
 }
 
 func TestDecimal_SetString(t *testing.T) {
-	// for i, td := range intData {
-	// 	t.Run(strconv.Itoa(i), func(t *testing.T) {
-	// 		d, _ := new(Decimal).SetMode(ToNearestEven).SetPrec(td.p).SetString(td.s)
-	// 		if !reflect.DeepEqual(td.d, d.mant) {
-	// 			t.Fatalf("\nexpected mantissa %v\n              got %v", td.d, d.mant)
-	// 		}
-	// 		if td.pr != d.Prec() {
-	// 			t.Fatalf("\nexpected precision %v\n               got %v", td.pr, d.Prec())
-	// 		}
-	// 		if td.e != d.exp {
-	// 			t.Fatalf("\nexpected exponent %v\n              got %v", td.p, d.Prec())
-	// 		}
-	// 	})
-	// }
+	for i, td := range intData {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			d, _ := new(Decimal).SetMode(ToNearestEven).SetPrec(td.p).SetString(td.s)
+			if !reflect.DeepEqual(td.d, d.mant) {
+				t.Fatalf("\nexpected mantissa %v\n              got %v", td.d, d.mant)
+			}
+			if td.pr != d.Prec() {
+				t.Fatalf("\nexpected precision %v\n               got %v", td.pr, d.Prec())
+			}
+			if td.e != d.exp {
+				t.Fatalf("\nexpected exponent %v\n              got %v", td.p, d.Prec())
+			}
+		})
+	}
 }
 
 func BenchmarkDnorm(b *testing.B) {

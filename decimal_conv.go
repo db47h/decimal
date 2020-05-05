@@ -75,12 +75,9 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 	// 2 and 5. This reduces the size of the multiplication factor
 	// needed for base-10 exponents.
 
-	panic("adjust exponent needed")
-
 	// normalize mantissa and determine initial exponent contributions
-	// exp2 := int64(len(z.mant))*_W - fnorm(z.mant)
 	exp2 := int64(0)
-	exp5 := int64(0)
+	exp10 := int64(len(z.mant))*_WD - dnorm(z.mant)
 
 	// determine binary or decimal exponent contribution of radix point
 	if fcount < 0 {
@@ -90,8 +87,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 		d := int64(fcount)
 		switch b {
 		case 10:
-			exp5 = d
-			fallthrough // 10**e == 5**e * 2**e
+			exp10 = d
 		case 2:
 			exp2 += d
 		case 8:
@@ -107,42 +103,68 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 	// take actual exponent into account
 	switch ebase {
 	case 10:
-		exp5 += exp
-		fallthrough // see fallthrough above
+		exp10 += exp
 	case 2:
 		exp2 += exp
 	default:
 		panic("unexpected exponent base")
 	}
-	// exp consumed - not needed anymore
+	// exp consumed - not needed anymoregri
 
-	// apply 2**exp2
-	if MinExp <= exp2 && exp2 <= MaxExp {
+	// apply 10**exp10
+	if MinExp <= exp10 && exp10 <= MaxExp {
 		z.prec = prec
 		z.form = finite
-		z.exp = int32(exp2)
+		z.exp = int32(exp10)
 		f = z
 	} else {
 		err = fmt.Errorf("exponent overflow")
 		return
 	}
 
-	if exp5 == 0 {
-		// no decimal exponent contribution
+	if exp2 == 0 {
+		// no binary exponent contribution
 		z.round(0)
 		return
 	}
-	// exp5 != 0
+	// exp2 != 0
 
-	// // apply 5**exp5
-	// p := new(Decimal).SetPrec(z.Prec() + _WD) // use more bits for p -- TODO(gri) what is the right number?
-	// if exp5 < 0 {
-	// 	z.Quo(z, p.pow5(uint64(-exp5)))
-	// } else {
-	// 	z.Mul(z, p.pow5(uint64(exp5)))
-	// }
+	// // apply 2**exp2
+	p := new(Decimal).SetPrec(z.Prec() + _WD) // use more bits for p -- TODO(db47h) what is the right number?
+	if exp2 < 0 {
+		z.Quo(z, p.pow2(uint64(-exp2)))
+	} else {
+		z.Mul(z, p.pow2(uint64(exp2)))
+	}
 
 	return
+}
+
+// pow5 sets z to 5**n and returns z.
+// n must not be negative.
+func (z *Decimal) pow2(n uint64) *Decimal {
+	const m = _WD * 100000 / 30103 // maximum exponent such that 2**m < _BD
+	if n <= m {
+		return z.SetUint64(1 << n)
+	}
+	// n > m
+
+	z.SetUint64(1 << m)
+	n -= m
+
+	// use more bits for f than for z
+	// TODO(db47h) what is the right number?
+	f := new(Decimal).SetPrec(z.Prec() + _WD).SetUint64(2)
+
+	for n > 0 {
+		if n&1 != 0 {
+			z.Mul(z, f)
+		}
+		f.Mul(f, f)
+		n >>= 1
+	}
+
+	return z
 }
 
 // Parse parses s which must contain a text representation of a floating- point

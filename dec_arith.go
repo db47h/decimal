@@ -75,37 +75,12 @@ func shr10VU(z, x dec, s uint) (r Word) {
 }
 
 func decTrailingZeros(n uint) uint {
-	if bits.UintSize == 32 {
-		return dec32TrailingZeros(n)
-	}
-	return dec64TrailingZeros(uint64(n))
-}
-
-func dec32TrailingZeros(n uint) uint {
 	var d uint
-	if n%100000000 == 0 {
-		n /= 100000000
-		d += 8
-	}
-	if n%10000 == 0 {
-		n /= 10000
-		d += 4
-	}
-	if n%100 == 0 {
-		n /= 100
-		d += 2
-	}
-	if n%10 == 0 {
-		d += 1
-	}
-	return d
-}
-
-func dec64TrailingZeros(n uint64) uint {
-	var d uint
-	if n%10000000000000000 == 0 {
-		n /= 10000000000000000
-		d += 16
+	if bits.UintSize > 32 {
+		if uint64(n)%10000000000000000 == 0 {
+			n = uint(uint64(n) / uint64(10000000000000000))
+			d += 16
+		}
 	}
 	if n%100000000 == 0 {
 		n /= 100000000

@@ -13,8 +13,9 @@ const (
 	// word and 19 per 64 bits word.
 	_WD = _W * 30103 / 100000
 	// Decimal base for a word. 1e9 for 32 bits words and 1e19 for 64 bits
-	// words. TODO(db47h): We want this value to be a const. This is a dirty
-	// hack to avoid conditional compilation that will break if bits.UintSize>64
+	// words.
+	// TODO(db47h): We want this value to be a const. This is a dirty hack to
+	// avoid conditional compilation that will break if bits.UintSize>64
 	_BD = 9999999998000000000*(_WD/19) + 1000000000*(_WD/9)
 )
 

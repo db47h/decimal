@@ -11,18 +11,19 @@ import (
 func TestDec_ntz(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
-	again:
 		w := uint(rand.Uint64()) % _BD
-		// TODO: WTF? ignore anything divisible by ten since decDigits(10) = 2 but dec{100000000...}.digits() = 1
-		if w%10 == 0 {
-			goto again
-		}
 		e := uint(rand.Intn(_WD + 1))
 		h, l := bits.Mul(w, pow10(e))
 		h, l = bits.Div(h, l, _BD)
 		d := dec{Word(l), Word(h)}.norm()
+		// adjust e if w == 0 or w%10 == 0
+		if w == 0 {
+			e = 0
+		} else {
+			e += decTrailingZeros(w)
+		}
 		if d.ntz() != e {
-			t.Fatalf("dec{%v}.digits() = %d, expected %d", d, d.ntz(), e)
+			t.Fatalf("dec{%v}.ntz() = %d, expected %d", d, d.ntz(), e)
 		}
 	}
 }

@@ -31,6 +31,10 @@ const (
 // representation of 0 is the empty or nil slice (length = 0).
 type dec []Word
 
+var (
+	decOne = dec{1}
+)
+
 func (z dec) clear() {
 	for i := range z {
 		z[i] = 0
@@ -48,7 +52,7 @@ func (z dec) norm() dec {
 // digits returns the number of digits of x.
 func (x dec) digits() uint {
 	if i := len(x) - 1; i >= 0 {
-		return uint(i*_W) + decDigits(uint(x[i]))
+		return uint(i*_WD) + decDigits(uint(x[i]))
 	}
 	return 0
 }
@@ -138,6 +142,33 @@ func (x dec) sticky(i uint) uint {
 	return 0
 }
 
+func (x dec) cmp(y dec) (r int) {
+	m := len(x)
+	n := len(y)
+	if m != n || m == 0 {
+		switch {
+		case m < n:
+			r = -1
+		case m > n:
+			r = 1
+		}
+		return
+	}
+
+	i := m - 1
+	for i > 0 && x[i] == y[i] {
+		i--
+	}
+
+	switch {
+	case x[i] < y[i]:
+		r = -1
+	case x[i] > y[i]:
+		r = 1
+	}
+	return
+}
+
 // q = (x-r)/y, with 0 <= r < y
 func (z dec) divW(x dec, y Word) (q dec, r Word) {
 	m := len(x)
@@ -190,8 +221,33 @@ func (z dec) shl(x dec, s uint) dec {
 
 	n := m + int(s/_WD)
 	z = z.make(n + 1)
+	// TODO(db47h): optimize and bench shifts when s%_WD == 0
 	z[n] = shl10VU(z[n-m:n], x, s%_WD)
 	z[0 : n-m].clear()
+
+	return z.norm()
+}
+
+// z = x >> s
+func (z dec) shr(x dec, s uint) dec {
+	if s == 0 {
+		if same(z, x) {
+			return z
+		}
+		if !alias(z, x) {
+			return z.set(x)
+		}
+	}
+
+	m := len(x)
+	n := m - int(s/_WD)
+	if n <= 0 {
+		return z[:0]
+	}
+	// n > 0
+
+	z = z.make(n)
+	shr10VU(z, x[m-n:], s%_WD)
 
 	return z.norm()
 }

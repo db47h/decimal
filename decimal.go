@@ -173,15 +173,15 @@ func (z *Decimal) SetInf(signbit bool) *Decimal {
 	return z
 }
 
-const ln2_10 = math.Ln10 / math.Ln2
+const log2_10 = math.Ln10 / math.Ln2
 
 // SetInt sets z to the (possibly rounded) value of x and returns z.
 // If z's precision is 0, it is changed to the larger of x.BitLen()
 // or 64 (and rounding will have no effect).
 func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	bits := uint32(x.BitLen())
-	// estimate precision. May overshoot actual precision by 1.
-	prec := uint32(float64(bits)/ln2_10) + 1
+	prec := uint32(float64(bits)/log2_10) + 1 // off by 1 at most
+	// TODO(db47h): adjust precision if needed
 	if z.prec == 0 {
 		z.prec = umax32(prec, _WD)
 	}

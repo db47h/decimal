@@ -45,7 +45,7 @@ func TestDnorm(t *testing.T) {
 			}
 			t.Fatalf("dec{%v, %v}).norm() returned dec{} for word %d", l, h, w)
 		}
-		dd := dec{}.set(d)
+		dd := dec(nil).set(d)
 		s := dnorm(dd)
 		// d should now have a single element with e shifted left
 		ew := w * pow10(_WD-decDigits(w))
@@ -94,7 +94,7 @@ func TestDecimal_SetString(t *testing.T) {
 
 func BenchmarkDnorm(b *testing.B) {
 	rand.Seed(0xdeadbeefbadf00d)
-	d := dec{}.make(1000)
+	d := dec(nil).make(1000)
 	for i := range d {
 		d[i] = Word(rand.Uint64()) % _BD
 	}

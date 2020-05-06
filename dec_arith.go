@@ -23,6 +23,21 @@ var maxDigits = [...]uint{
 // In other words, n the number of digits required to represent n.
 // Returns 0 for x == 0.
 func decDigits(x uint) (n uint) {
+	if bits.UintSize == 32 {
+		return decDigits32(x)
+	}
+	return decDigits64(uint64(x))
+}
+
+func decDigits64(x uint64) (n uint) {
+	n = maxDigits[bits.Len64(x)]
+	if x < uint64(pow10(n-1)) {
+		n--
+	}
+	return n
+}
+
+func decDigits32(x uint) (n uint) {
 	n = maxDigits[bits.Len(x)]
 	if x < pow10(n-1) {
 		n--
@@ -187,4 +202,29 @@ func mulAdd10WWW(x, y, c Word) (z1, z0 Word) {
 	lo, cc = bits.Add(lo, uint(c), 0)
 	hi, lo = bits.Div(hi+cc, lo, _BD)
 	return Word(hi), Word(lo)
+}
+
+// z1<<_W + z0 = x*y
+func mul10WW(x, y Word) (z1, z0 Word) {
+	hi, lo := bits.Mul(uint(x), uint(y))
+	hi, lo = bits.Div(hi, lo, _BD)
+	return Word(hi), Word(lo)
+}
+
+func add10WW(x, y Word) (s, c Word) {
+	r, cc := bits.Add(uint(x), uint(y), 0)
+	if r >= _BD {
+		r -= _BD
+		cc = 1
+	}
+	return Word(r), Word(cc)
+}
+
+func addMul10VVW(z, x []Word, y Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x); i++ {
+		z1, z0 := mulAdd10WWW(x[i], y, z[i])
+		z[i], c = add10WW(z0, c)
+		c += z1
+	}
+	return
 }

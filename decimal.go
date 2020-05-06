@@ -6,6 +6,8 @@ import (
 	"math/big"
 )
 
+const DefaultDecimalPrec = 34
+
 type Decimal struct {
 	mant dec
 	exp  int32
@@ -118,8 +120,49 @@ func (x *Decimal) Mode() RoundingMode {
 	return x.mode
 }
 
+// Mul sets z to the rounded product x*y and returns z.
+// Precision, rounding, and accuracy reporting are as for Add.
+// Mul panics with ErrNaN if one operand is zero and the other
+// operand an infinity. The value of z is undefined in that case.
 func (z *Decimal) Mul(x, y *Decimal) *Decimal {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
+
+	if z.prec == 0 {
+		z.prec = umax32(x.prec, y.prec)
+	}
+
+	z.neg = x.neg != y.neg
+
+	if x.form == finite && y.form == finite {
+		// x * y (common case)
+		z.umul(x, y)
+		return z
+	}
+
+	z.acc = Exact
+	if x.form == zero && y.form == inf || x.form == inf && y.form == zero {
+		// ±0 * ±Inf
+		// ±Inf * ±0
+		// value of z is undefined but make sure it's valid
+		z.form = zero
+		z.neg = false
+		panic(ErrNaN{"multiplication of zero with infinity"})
+	}
+
+	if x.form == inf || y.form == inf {
+		// ±Inf * y
+		// x * ±Inf
+		z.form = inf
+		return z
+	}
+
+	// ±0 * y
+	// x * ±0
+	z.form = zero
+	return z
 }
 
 // Neg sets z to the (possibly rounded) value of x with its sign negated,
@@ -190,13 +233,13 @@ const log2_10 = math.Ln10 / math.Ln2
 
 // SetInt sets z to the (possibly rounded) value of x and returns z.
 // If z's precision is 0, it is changed to the larger of x.BitLen()
-// or 64 (and rounding will have no effect).
+// or DefaultDecimalPrec (and rounding will have no effect).
 func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	bits := uint32(x.BitLen())
 	prec := uint32(float64(bits)/log2_10) + 1 // off by 1 at most
 	// TODO(db47h): adjust precision if needed
 	if z.prec == 0 {
-		z.prec = umax32(prec, _WD)
+		z.prec = umax32(prec, DefaultDecimalPrec)
 	}
 	// TODO(db47h) truncating x could be more efficient if z.prec > 0
 	// but small compared to the size of x, or if there are many trailing 0's.
@@ -213,8 +256,37 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	return z
 }
 
+func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
+	if z.prec == 0 {
+		z.prec = DefaultDecimalPrec
+	}
+	z.acc = Exact
+	z.neg = neg
+	if x == 0 {
+		z.form = zero
+		return z
+	}
+	// x != 0
+	z.form = finite
+	z.mant, z.exp = z.mant.setUint64(x)
+	dnorm(z.mant)
+	if z.prec < 20 {
+		z.round(0)
+	}
+	return z
+}
+
+// SetInt64 sets z to the (possibly rounded) value of x and returns z. If z's
+// precision is 0, it is changed to DefaultDecimalPrec (and rounding will have
+// no effect).
 func (z *Decimal) SetInt64(x int64) *Decimal {
-	panic("not implemented")
+	u := x
+	if u < 0 {
+		u = -u
+	}
+	// We cannot simply call z.SetUint64(uint64(u)) and change
+	// the sign afterwards because the sign affects rounding.
+	return z.setBits64(x < 0, uint64(u))
 }
 
 func (z *Decimal) setExpAndRound(exp int64, sbit uint) {
@@ -285,8 +357,11 @@ func (z *Decimal) SetRat(x *big.Rat) *Decimal {
 	panic("not implemented")
 }
 
+// SetUint64 sets z to the (possibly rounded) value of x and returns z. If z's
+// precision is 0, it is changed to DefaultDecimalPrec (and rounding will have
+// no effect).
 func (z *Decimal) SetUint64(x uint64) *Decimal {
-	panic("not implemented")
+	return z.setBits64(false, x)
 }
 
 // Sign returns:
@@ -356,6 +431,19 @@ func (x *Decimal) validate() {
 		panic("zero precision finite number")
 	}
 
+}
+
+func validateBinaryOperands(x, y *Decimal) {
+	if !debugDecimal {
+		// avoid performance bugs
+		panic("validateBinaryOperands called but debugFloat is not set")
+	}
+	if len(x.mant) == 0 {
+		panic("empty mantissa for x")
+	}
+	if len(y.mant) == 0 {
+		panic("empty mantissa for y")
+	}
 }
 
 // round rounds z according to z.mode to z.prec digits and sets z.acc accordingly.
@@ -468,4 +556,27 @@ func dnorm(m dec) int64 {
 		}
 	}
 	return int64(s)
+}
+
+// z = x * y, ignoring signs of x and y for the multiplication
+// but using the sign of z for rounding the result.
+// x and y must have a non-empty mantissa and valid exponent.
+func (z *Decimal) umul(x, y *Decimal) {
+	if debugDecimal {
+		validateBinaryOperands(x, y)
+	}
+
+	// Note: This is doing too much work if the precision
+	// of z is less than the sum of the precisions of x
+	// and y which is often the case (e.g., if all floats
+	// have the same precision).
+	// TODO(db47h) Optimize this for the common case.
+
+	e := int64(x.exp) + int64(y.exp)
+	if x == y {
+		z.mant = z.mant.sqr(x.mant)
+	} else {
+		z.mant = z.mant.mul(x.mant, y.mant)
+	}
+	z.setExpAndRound(e-dnorm(z.mant), 0)
 }

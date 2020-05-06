@@ -262,3 +262,13 @@ func pow(x Word, n int) (p Word) {
 	}
 	return
 }
+
+// An ErrNaN panic is raised by a Float operation that would lead to
+// a NaN under IEEE-754 rules. An ErrNaN implements the error interface.
+type ErrNaN struct {
+	msg string
+}
+
+func (err ErrNaN) Error() string {
+	return err.msg
+}

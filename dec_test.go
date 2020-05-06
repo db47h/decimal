@@ -49,20 +49,3 @@ func TestDec_digit(t *testing.T) {
 		})
 	}
 }
-
-var (
-	benchU uint
-)
-
-func BenchmarkDec_Digits(b *testing.B) {
-	rand.Seed(0xdeadbeefbadf00d)
-	d := dec(nil).make(10000)
-	for i := range d {
-		d[i] = Word(rand.Uint64()) % _BD
-	}
-	for i := 0; i < b.N; i++ {
-		d[0] = Word(rand.Uint64()) % _BD
-		d[len(d)-1] = Word(rand.Uint64()) % _BD
-		benchU = d.digits()
-	}
-}

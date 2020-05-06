@@ -79,7 +79,20 @@ func (x *Decimal) IsInf() bool {
 }
 
 func (x *Decimal) IsInt() bool {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+	// special cases
+	if x.form != finite {
+		return x.form == zero
+	}
+	// x.form == finite
+	if x.exp <= 0 {
+		return false
+	}
+	// x.exp > 0
+	// mant[0:prec] * 10**exp >= 0 || mant[0:mant.MinPrec()]*10**exp >= 0
+	return x.prec <= uint32(x.exp) || x.MinPrec() <= uint(x.exp)
 }
 
 func (x *Decimal) MantExp(mant *Decimal) (exp int) {

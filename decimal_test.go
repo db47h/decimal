@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var benchU uint
+
 var intData = []struct {
 	s  string
 	b  int

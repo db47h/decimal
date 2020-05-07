@@ -64,11 +64,15 @@ func TestDecimal_SetInt(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			b, _ := new(big.Int).SetString(td.s, td.b)
 			d := new(Decimal).SetMode(ToNearestEven).SetPrec(td.p).SetInt(b)
+			ep := td.pr
+			if td.p == 0 && ep < DefaultDecimalPrec {
+				ep = DefaultDecimalPrec
+			}
 			if !reflect.DeepEqual(td.d, d.mant) {
 				t.Fatalf("\nexpected mantissa %v\n              got %v", td.d, d.mant)
 			}
-			if td.pr != d.Prec() {
-				t.Fatalf("\nexpected precision %v\n               got %v", td.pr, d.Prec())
+			if ep != d.Prec() {
+				t.Fatalf("\nexpected precision %v\n               got %v", ep, d.Prec())
 			}
 			if td.e != d.exp {
 				t.Fatalf("\nexpected exponent %v\n              got %v", td.p, d.Prec())

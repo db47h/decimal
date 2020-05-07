@@ -6,6 +6,14 @@ import (
 	"math/big"
 )
 
+// DefaultDecimalPrec is the default minimum precision used when creating a new
+// Decimal from any other type. An uint64 requires up to 20 digits, which
+// amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits Words (32 bits).
+// Forcing the precision to 20 digits would result in 18 or 7 unused digits.
+// Using 34 instead gives a higher precision at no performance or memory cost
+// and gives room for 2 to 4 extra digits of extra precision for internal
+// computations at no performance or memory cost either. Also 34 digits matches
+// the precision of IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
 
 type Decimal struct {

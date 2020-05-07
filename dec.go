@@ -107,12 +107,12 @@ func (z dec) setWord(x Word) dec {
 
 func (z dec) setUint64(x uint64) (dec, int32) {
 	dig := int32(decDigits64(x))
-	if w := Word(x); uint64(w) == x {
+	if w := Word(x); uint64(w) == x && w < _BD {
 		return z.setWord(w), dig
 	}
 	// x could be a 2 to 3 words value
 	z = z.make(int(dig+_WD-1) / _WD)
-	for i := 0; i < len(z) && x != 0; i++ {
+	for i := 0; i < len(z); i++ {
 		hi, lo := bits.Div64(0, x, _BD)
 		z[i] = Word(lo)
 		x = hi
@@ -237,7 +237,6 @@ func (z dec) shl(x dec, s uint) dec {
 
 	n := m + int(s/_WD)
 	z = z.make(n + 1)
-	// TODO(db47h): optimize and bench shifts when s%_WD == 0
 	z[n] = shl10VU(z[n-m:n], x, s%_WD)
 	z[0 : n-m].clear()
 

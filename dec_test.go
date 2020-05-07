@@ -49,3 +49,31 @@ func TestDec_digit(t *testing.T) {
 		})
 	}
 }
+
+func TestDecSetUint64(t *testing.T) {
+	data := []struct {
+		in  uint64
+		exp int32
+	}{
+		{_BD + 1, int32(_WD + 1)},
+		{_BD - 1, int32(_WD)},
+		{9999, 4},
+	}
+	var z dec
+	for _, d := range data {
+		out := fmt.Sprintf("%d", d.in)
+		t.Run(out, func(t *testing.T) {
+			var exp int32
+			z, exp = z.setUint64(d.in)
+			if a := string(z.utoa(10)); a != out {
+				t.Fatalf("expected mantissa %v, got %v", out, a)
+			}
+			if exp != d.exp {
+				t.Fatalf("expected exponent %v, got %v", d.exp, exp)
+			}
+			if l := (exp + _WD - 1) / _WD; l != int32(len(z)) {
+				t.Fatalf("expected length %v, got %v", l, len(z))
+			}
+		})
+	}
+}

@@ -45,6 +45,13 @@ func decDigits32(x uint) (n uint) {
 	return n
 }
 
+func nldz(x Word) uint {
+	if bits.UintSize == 32 {
+		return _WD - decDigits32(uint(x))
+	}
+	return _WD - decDigits64(uint64(x))
+}
+
 // shl10VU sets z to x*(10**s), s < _WD
 func shl10VU(z, x dec, s uint) (r Word) {
 	if s == 0 {
@@ -150,19 +157,13 @@ func decMaxPow(b Word) (p Word, n int) {
 	return Word(decMaxPow64[i]), int(decMaxPow64[i+1])
 }
 
-// addW adds y to x. The resulting carry c is either 0 or 1.
+// add10VW adds y to x. The resulting carry c is either 0 or 1.
 func add10VW(z, x dec, y Word) (c Word) {
-	s := x[0] + y
-	if (s < y) || s >= _BD {
-		z[0] = s - _BD
-		c = 1
-	} else {
-		z[0] = s
-	}
+	z[0], c = add10WW(x[0], y)
 	// propagate carry
 	for i := 1; i < len(z) && i < len(x); i++ {
-		s = x[i] + c
-		if s == _BD {
+		s := x[i] + c
+		if s >= _BD {
 			z[i] = 0
 			continue
 		}
@@ -222,9 +223,11 @@ func add10WW(x, y Word) (s, c Word) {
 
 func addMul10VVW(z, x []Word, y Word) (c Word) {
 	for i := 0; i < len(z) && i < len(x); i++ {
-		z1, z0 := mulAdd10WWW(x[i], y, z[i])
-		z[i], c = add10WW(z0, c)
-		c += z1
+		// do x[i] * y + c in base 2 => (hi+cc) * 2**_W + lo
+		hi, z0 := mulAddWWW(x[i], y, z[i])
+		lo, cc := bits.Add(uint(z0), uint(c), 0)
+		// convert to base _BD
+		c, z[i] = divWW(hi+Word(cc), Word(lo), _BD)
 	}
 	return
 }

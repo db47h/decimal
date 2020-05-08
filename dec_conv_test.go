@@ -5,6 +5,7 @@
 package decimal
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -335,33 +336,33 @@ func BenchmarkDecStringPiParallel(b *testing.B) {
 	})
 }
 
-// func BenchmarkScan(b *testing.B) {
-// 	const x = 10
-// 	for _, base := range []int{2, 8, 10, 16} {
-// 		for _, y := range []Word{10, 100, 1000, 10000, 100000} {
-// 			if isRaceBuilder && y > 1000 {
-// 				continue
-// 			}
-// 			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
-// 				b.StopTimer()
-// 				var z nat
-// 				z = z.expWW(x, y)
+func BenchmarkDecScan(b *testing.B) {
+	const x = 10
+	for _, base := range []int{2, 8, 10, 16} {
+		for _, y := range []Word{10, 100, 1000, 10000, 100000} {
+			if isRaceBuilder && y > 1000 {
+				continue
+			}
+			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
+				b.StopTimer()
+				var z dec
+				z = z.expWW(x, y)
 
-// 				s := z.utoa(base)
-// 				if t := itoa(z, base); !bytes.Equal(s, t) {
-// 					b.Fatalf("scanning: got %s; want %s", s, t)
-// 				}
-// 				b.StartTimer()
+				s := z.utoa(base)
+				if t := dtoa(z, base); !bytes.Equal(s, t) {
+					b.Fatalf("scanning: got %s; want %s", s, t)
+				}
+				b.StartTimer()
 
-// 				for i := 0; i < b.N; i++ {
-// 					z.scan(bytes.NewReader(s), base, false)
-// 				}
-// 			})
-// 		}
-// 	}
-// }
+				for i := 0; i < b.N; i++ {
+					z.scan(bytes.NewReader(s), base, false)
+				}
+			})
+		}
+	}
+}
 
-func BenchmarkString(b *testing.B) {
+func BenchmarkDecString(b *testing.B) {
 	const x = 10
 	for _, base := range []int{2, 8, 10, 16} {
 		for _, y := range []Word{10, 100, 1000, 10000, 100000} {
@@ -428,22 +429,22 @@ func BenchmarkString(b *testing.B) {
 // 	}
 // }
 
-// func TestStringPowers(t *testing.T) {
-// 	var p Word
-// 	for b := 2; b <= 16; b++ {
-// 		for p = 0; p <= 512; p++ {
-// 			if testing.Short() && p > 10 {
-// 				break
-// 			}
-// 			x := nat(nil).expWW(Word(b), p)
-// 			xs := x.utoa(b)
-// 			xs2 := itoa(x, b)
-// 			if !bytes.Equal(xs, xs2) {
-// 				t.Errorf("failed at %d ** %d in base %d: %s != %s", b, p, b, xs, xs2)
-// 			}
-// 		}
-// 		if b >= 3 && testing.Short() {
-// 			break
-// 		}
-// 	}
-// }
+func TestDecStringPowers(t *testing.T) {
+	var p Word
+	for b := 2; b <= 16; b++ {
+		for p = 0; p <= 512; p++ {
+			if testing.Short() && p > 10 {
+				break
+			}
+			x := dec(nil).expWW(Word(b), p)
+			xs := x.utoa(b)
+			xs2 := dtoa(x, b)
+			if !bytes.Equal(xs, xs2) {
+				t.Fatalf("failed at %d ** %d in base %d: %s != %s", b, p, b, xs, xs2)
+			}
+		}
+		if b >= 3 && testing.Short() {
+			break
+		}
+	}
+}

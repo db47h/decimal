@@ -12,6 +12,9 @@ import (
 	"strconv"
 )
 
+// TODO(db47h): set this to false
+const isRaceBuilder = true
+
 const digits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 // MaxBase is the largest number base accepted for string conversions.
@@ -282,5 +285,8 @@ func (err ErrNaN) Error() string {
 
 var rnd = rand.New(rand.NewSource(0))
 
-// TODO(db47h): set this to false
-const isRaceBuilder = true
+// nlz returns the number of leading zeros in x.
+// Wraps bits.LeadingZeros call for convenience.
+func nlz(x Word) uint {
+	return uint(bits.LeadingZeros(uint(x)))
+}

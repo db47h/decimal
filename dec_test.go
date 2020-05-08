@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-var cmpTests = []struct {
+var decCmpTests = []struct {
 	x, y dec
 	r    int
 }{
@@ -31,8 +31,8 @@ var cmpTests = []struct {
 	{dec{34986, 41, 105, 1957}, dec{56, 7458, 104, 1957}, 1},
 }
 
-func TestCmp(t *testing.T) {
-	for i, a := range cmpTests {
+func TestDecCmp(t *testing.T) {
+	for i, a := range decCmpTests {
 		r := a.x.cmp(a.y)
 		if r != a.r {
 			t.Errorf("#%d got r = %v; want %v", i, r, a.r)
@@ -40,12 +40,12 @@ func TestCmp(t *testing.T) {
 	}
 }
 
-type funNN func(z, x, y dec) dec
-type argNN struct {
+type decFunNN func(z, x, y dec) dec
+type decArgNN struct {
 	z, x, y dec
 }
 
-var sumNN = []argNN{
+var decSumNN = []decArgNN{
 	{},
 	{dec{1}, nil, dec{1}},
 	{dec{1111111110}, dec{123456789}, dec{987654321}},
@@ -54,7 +54,7 @@ var sumNN = []argNN{
 	{dec{0, 0, 0, 1}, dec{0, 0, _MD}, dec{0, 0, 1}},
 }
 
-var prodNN = []argNN{
+var decProdNN = []decArgNN{
 	{},
 	{nil, nil, nil},
 	{nil, dec{991}, nil},
@@ -95,8 +95,8 @@ func decFromString(s string) dec {
 	return x
 }
 
-func TestSet(t *testing.T) {
-	for _, a := range sumNN {
+func TestDecSet(t *testing.T) {
+	for _, a := range decSumNN {
 		z := dec(nil).set(a.z)
 		if z.cmp(a.z) != 0 {
 			t.Errorf("got z = %v; want %v", z, a.z)
@@ -104,34 +104,34 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func testFunNN(t *testing.T, msg string, f funNN, a argNN) {
+func decTestFunNN(t *testing.T, msg string, f decFunNN, a decArgNN) {
 	z := f(nil, a.x, a.y)
 	if z.cmp(a.z) != 0 {
 		t.Errorf("%s%+v\n\tgot z = %v; want %v", msg, a, z, a.z)
 	}
 }
 
-func TestFunNN(t *testing.T) {
-	for _, a := range sumNN {
+func TestDecFunNN(t *testing.T) {
+	for _, a := range decSumNN {
 		arg := a
-		testFunNN(t, "add", dec.add, arg)
+		decTestFunNN(t, "add", dec.add, arg)
 
-		arg = argNN{a.z, a.y, a.x}
-		testFunNN(t, "add symmetric", dec.add, arg)
+		arg = decArgNN{a.z, a.y, a.x}
+		decTestFunNN(t, "add symmetric", dec.add, arg)
 
-		arg = argNN{a.x, a.z, a.y}
-		testFunNN(t, "sub", dec.sub, arg)
+		arg = decArgNN{a.x, a.z, a.y}
+		decTestFunNN(t, "sub", dec.sub, arg)
 
-		arg = argNN{a.y, a.z, a.x}
-		testFunNN(t, "sub symmetric", dec.sub, arg)
+		arg = decArgNN{a.y, a.z, a.x}
+		decTestFunNN(t, "sub symmetric", dec.sub, arg)
 	}
 
-	for _, a := range prodNN {
+	for _, a := range decProdNN {
 		arg := a
-		testFunNN(t, "mul", dec.mul, arg)
+		decTestFunNN(t, "mul", dec.mul, arg)
 
-		arg = argNN{a.z, a.y, a.x}
-		testFunNN(t, "mul symmetric", dec.mul, arg)
+		arg = decArgNN{a.z, a.y, a.x}
+		decTestFunNN(t, "mul symmetric", dec.mul, arg)
 	}
 }
 
@@ -166,8 +166,8 @@ func TestFunNN(t *testing.T) {
 // 	}
 // }
 
-// allocBytes returns the number of bytes allocated by invoking f.
-func allocBytes(f func()) uint64 {
+// decAllocBytes returns the number of bytes allocated by invoking f.
+func decAllocBytes(f func()) uint64 {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	t := stats.TotalAlloc
@@ -176,14 +176,14 @@ func allocBytes(f func()) uint64 {
 	return stats.TotalAlloc - t
 }
 
-// TestMulUnbalanced tests that multiplying numbers of different lengths
+// TestDecMulUnbalanced tests that multiplying numbers of different lengths
 // does not cause deep recursion and in turn allocate too much memory.
 // Test case for issue 3807.
-func TestMulUnbalanced(t *testing.T) {
+func TestDecMulUnbalanced(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	x := rndDec(50000)
 	y := rndDec(40)
-	allocSize := allocBytes(func() {
+	allocSize := decAllocBytes(func() {
 		dec(nil).mul(x, y)
 	})
 	inputSize := uint64(len(x)+len(y)) * _S
@@ -208,7 +208,7 @@ func rndDec1(n int) dec {
 	return x
 }
 
-func BenchmarkMul(b *testing.B) {
+func BenchmarkDecMul1e4(b *testing.B) {
 	mulx := rndDec(1e4)
 	muly := rndDec(1e4)
 	b.ResetTimer()
@@ -228,10 +228,10 @@ func benchmarkDecMul(b *testing.B, nwords int) {
 	}
 }
 
-var mulBenchSizes = []int{10, 100, 1000, 10000, 100000}
+var decMulBenchSizes = []int{10, 100, 1000, 10000, 100000}
 
 func BenchmarkDecMul(b *testing.B) {
-	for _, n := range mulBenchSizes {
+	for _, n := range decMulBenchSizes {
 		if isRaceBuilder && n > 1e3 {
 			continue
 		}
@@ -241,7 +241,7 @@ func BenchmarkDecMul(b *testing.B) {
 	}
 }
 
-func TestNLZ(t *testing.T) {
+func TestDecNLZ10(t *testing.T) {
 	var x Word = _MD
 	for i := 0; i <= _WD; i++ {
 		if int(nlz10(x)) != i {
@@ -251,13 +251,13 @@ func TestNLZ(t *testing.T) {
 	}
 }
 
-type shiftTest struct {
+type decShiftTest struct {
 	in    dec
 	shift uint
 	out   dec
 }
 
-var leftShiftTests = []shiftTest{
+var decLeftShiftTests = []decShiftTest{
 	{nil, 0, nil},
 	{nil, 1, nil},
 	{decOne, 0, decOne},
@@ -266,8 +266,8 @@ var leftShiftTests = []shiftTest{
 	{dec{_BD / 10, 0}, 1, dec{0, 1}},
 }
 
-func TestShiftLeft(t *testing.T) {
-	for i, test := range leftShiftTests {
+func TestDecShiftLeft(t *testing.T) {
+	for i, test := range decLeftShiftTests {
 		var z dec
 		z = z.shl(test.in, test.shift)
 		for j, d := range test.out {
@@ -279,7 +279,7 @@ func TestShiftLeft(t *testing.T) {
 	}
 }
 
-var rightShiftTests = []shiftTest{
+var decRightShiftTests = []decShiftTest{
 	{nil, 0, nil},
 	{nil, 1, nil},
 	{decOne, 0, decOne},
@@ -289,8 +289,8 @@ var rightShiftTests = []shiftTest{
 	{dec{10, 1, 1}, 1, dec{_BD/10 + 1, _BD / 10}},
 }
 
-func TestShiftRight(t *testing.T) {
-	for i, test := range rightShiftTests {
+func TestDecShiftRight(t *testing.T) {
+	for i, test := range decRightShiftTests {
 		var z dec
 		z = z.shr(test.in, test.shift)
 		for j, d := range test.out {
@@ -302,7 +302,7 @@ func TestShiftRight(t *testing.T) {
 	}
 }
 
-func BenchmarkZeroShifts(b *testing.B) {
+func BenchmarkDecZeroShifts(b *testing.B) {
 	x := rndDec(800)
 
 	b.Run("Shl", func(b *testing.B) {
@@ -330,21 +330,21 @@ func BenchmarkZeroShifts(b *testing.B) {
 	})
 }
 
-type modWTest struct {
+type decModWTest struct {
 	in       string
 	dividend string
 	out      string
 }
 
-var modWTests32 = []modWTest{
+var decModWTests32 = []decModWTest{
 	{"23492635982634928349238759823742", "252341", "220170"},
 }
 
-var modWTests64 = []modWTest{
+var decModWTests64 = []decModWTest{
 	{"6527895462947293856291561095690465243862946", "524326975699234", "375066989628668"},
 }
 
-func runModWTests(t *testing.T, tests []modWTest) {
+func runModWTests(t *testing.T, tests []decModWTest) {
 	for i, test := range tests {
 		in := decFromString(test.in)
 		d := decFromString(test.dividend)
@@ -357,12 +357,12 @@ func runModWTests(t *testing.T, tests []modWTest) {
 	}
 }
 
-func TestModW(t *testing.T) {
+func TestDecModW(t *testing.T) {
 	if _W >= 32 {
-		runModWTests(t, modWTests32)
+		runModWTests(t, decModWTests32)
 	}
 	if _W >= 64 {
-		runModWTests(t, modWTests64)
+		runModWTests(t, decModWTests64)
 	}
 }
 
@@ -496,154 +496,154 @@ func TestModW(t *testing.T) {
 // 	}
 // }
 
-// var expNNTests = []struct {
-// 	x, y, m string
-// 	out     string
-// }{
-// 	{"0", "0", "0", "1"},
-// 	{"0", "0", "1", "0"},
-// 	{"1", "1", "1", "0"},
-// 	{"2", "1", "1", "0"},
-// 	{"2", "2", "1", "0"},
-// 	{"10", "100000000000", "1", "0"},
-// 	{"0x8000000000000000", "2", "", "0x40000000000000000000000000000000"},
-// 	{"0x8000000000000000", "2", "6719", "4944"},
-// 	{"0x8000000000000000", "3", "6719", "5447"},
-// 	{"0x8000000000000000", "1000", "6719", "1603"},
-// 	{"0x8000000000000000", "1000000", "6719", "3199"},
-// 	{
-// 		"2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347",
-// 		"298472983472983471903246121093472394872319615612417471234712061",
-// 		"29834729834729834729347290846729561262544958723956495615629569234729836259263598127342374289365912465901365498236492183464",
-// 		"23537740700184054162508175125554701713153216681790245129157191391322321508055833908509185839069455749219131480588829346291",
-// 	},
-// 	{
-// 		"11521922904531591643048817447554701904414021819823889996244743037378330903763518501116638828335352811871131385129455853417360623007349090150042001944696604737499160174391019030572483602867266711107136838523916077674888297896995042968746762200926853379",
-// 		"426343618817810911523",
-// 		"444747819283133684179",
-// 		"42",
-// 	},
-// }
+var decExpNNTests = []struct {
+	x, y, m string
+	out     string
+}{
+	{"0", "0", "0", "1"},
+	{"0", "0", "1", "0"},
+	{"1", "1", "1", "0"},
+	{"2", "1", "1", "0"},
+	{"2", "2", "1", "0"},
+	{"10", "100000000000", "1", "0"},
+	{"0x8000000000000000", "2", "", "0x40000000000000000000000000000000"},
+	{"0x8000000000000000", "2", "6719", "4944"},
+	{"0x8000000000000000", "3", "6719", "5447"},
+	{"0x8000000000000000", "1000", "6719", "1603"},
+	{"0x8000000000000000", "1000000", "6719", "3199"},
+	{
+		"2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347",
+		"298472983472983471903246121093472394872319615612417471234712061",
+		"29834729834729834729347290846729561262544958723956495615629569234729836259263598127342374289365912465901365498236492183464",
+		"23537740700184054162508175125554701713153216681790245129157191391322321508055833908509185839069455749219131480588829346291",
+	},
+	{
+		"11521922904531591643048817447554701904414021819823889996244743037378330903763518501116638828335352811871131385129455853417360623007349090150042001944696604737499160174391019030572483602867266711107136838523916077674888297896995042968746762200926853379",
+		"426343618817810911523",
+		"444747819283133684179",
+		"42",
+	},
+}
 
-// func TestExpNN(t *testing.T) {
-// 	for i, test := range expNNTests {
-// 		x := decFromString(test.x)
-// 		y := decFromString(test.y)
-// 		out := decFromString(test.out)
+func TestDecExpNN(t *testing.T) {
+	for i, test := range decExpNNTests {
+		x := decFromString(test.x)
+		y := decFromString(test.y)
+		out := decFromString(test.out)
 
-// 		var m nat
-// 		if len(test.m) > 0 {
-// 			m = decFromString(test.m)
-// 		}
+		var m dec
+		if len(test.m) > 0 {
+			m = decFromString(test.m)
+		}
 
-// 		z := nat(nil).expNN(x, y, m)
-// 		if z.cmp(out) != 0 {
-// 			t.Errorf("#%d got %s want %s", i, z.utoa(10), out.utoa(10))
-// 		}
-// 	}
-// }
+		z := dec(nil).expNN(x, y, m)
+		if z.cmp(out) != 0 {
+			t.Errorf("#%d got %s want %s", i, z.utoa(10), out.utoa(10))
+		}
+	}
+}
 
-// func BenchmarkExp3Power(b *testing.B) {
-// 	const x = 3
-// 	for _, y := range []Word{
-// 		0x10, 0x40, 0x100, 0x400, 0x1000, 0x4000, 0x10000, 0x40000, 0x100000, 0x400000,
-// 	} {
-// 		b.Run(fmt.Sprintf("%#x", y), func(b *testing.B) {
-// 			var z nat
-// 			for i := 0; i < b.N; i++ {
-// 				z.expWW(x, y)
-// 			}
-// 		})
-// 	}
-// }
+func BenchmarkDecExp3Power(b *testing.B) {
+	const x = 3
+	for _, y := range []Word{
+		0x10, 0x40, 0x100, 0x400, 0x1000, 0x4000, 0x10000, 0x40000, 0x100000, 0x400000,
+	} {
+		b.Run(fmt.Sprintf("%#x", y), func(b *testing.B) {
+			var z dec
+			for i := 0; i < b.N; i++ {
+				z.expWW(x, y)
+			}
+		})
+	}
+}
 
-// func fibo(n int) nat {
-// 	switch n {
-// 	case 0:
-// 		return nil
-// 	case 1:
-// 		return nat{1}
-// 	}
-// 	f0 := fibo(0)
-// 	f1 := fibo(1)
-// 	var f2 nat
-// 	for i := 1; i < n; i++ {
-// 		f2 = f2.add(f0, f1)
-// 		f0, f1, f2 = f1, f2, f0
-// 	}
-// 	return f1
-// }
+func decFibo(n int) dec {
+	switch n {
+	case 0:
+		return nil
+	case 1:
+		return dec{1}
+	}
+	f0 := decFibo(0)
+	f1 := decFibo(1)
+	var f2 dec
+	for i := 1; i < n; i++ {
+		f2 = f2.add(f0, f1)
+		f0, f1, f2 = f1, f2, f0
+	}
+	return f1
+}
 
-// var fiboNums = []string{
-// 	"0",
-// 	"55",
-// 	"6765",
-// 	"832040",
-// 	"102334155",
-// 	"12586269025",
-// 	"1548008755920",
-// 	"190392490709135",
-// 	"23416728348467685",
-// 	"2880067194370816120",
-// 	"354224848179261915075",
-// }
+var decFiboNums = []string{
+	"0",
+	"55",
+	"6765",
+	"832040",
+	"102334155",
+	"12586269025",
+	"1548008755920",
+	"190392490709135",
+	"23416728348467685",
+	"2880067194370816120",
+	"354224848179261915075",
+}
 
-// func TestFibo(t *testing.T) {
-// 	for i, want := range fiboNums {
-// 		n := i * 10
-// 		got := string(fibo(n).utoa(10))
-// 		if got != want {
-// 			t.Errorf("fibo(%d) failed: got %s want %s", n, got, want)
-// 		}
-// 	}
-// }
+func TestDecFibo(t *testing.T) {
+	for i, want := range decFiboNums {
+		n := i * 10
+		got := string(decFibo(n).utoa(10))
+		if got != want {
+			t.Errorf("fibo(%d) failed: got %s want %s", n, got, want)
+		}
+	}
+}
 
-// func BenchmarkFibo(b *testing.B) {
-// 	for i := 0; i < b.N; i++ {
-// 		fibo(1e0)
-// 		fibo(1e1)
-// 		fibo(1e2)
-// 		fibo(1e3)
-// 		fibo(1e4)
-// 		fibo(1e5)
-// 	}
-// }
+func BenchmarkFibo(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		decFibo(1e0)
+		decFibo(1e1)
+		decFibo(1e2)
+		decFibo(1e3)
+		decFibo(1e4)
+		decFibo(1e5)
+	}
+}
 
-// var bitTests = []struct {
-// 	x    string
-// 	i    uint
-// 	want uint
-// }{
-// 	{"0", 0, 0},
-// 	{"0", 1, 0},
-// 	{"0", 1000, 0},
+var decDigitTests = []struct {
+	x    string
+	i    uint
+	want uint
+}{
+	{"0", 0, 0},
+	{"0", 1, 0},
+	{"0", 1000, 0},
 
-// 	{"0x1", 0, 1},
-// 	{"0x10", 0, 0},
-// 	{"0x10", 3, 0},
-// 	{"0x10", 4, 1},
-// 	{"0x10", 5, 0},
+	{"1", 0, 1},
+	{"10000", 0, 0},
+	{"10000", 3, 0},
+	{"10000", 4, 1},
+	{"10000", 5, 0},
 
-// 	{"0x8000000000000000", 62, 0},
-// 	{"0x8000000000000000", 63, 1},
-// 	{"0x8000000000000000", 64, 0},
+	{"100000000000000000", 16, 0},
+	{"100000000000000000", 17, 1},
+	{"100000000000000000", 18, 0},
 
-// 	{"0x3" + strings.Repeat("0", 32), 127, 0},
-// 	{"0x3" + strings.Repeat("0", 32), 128, 1},
-// 	{"0x3" + strings.Repeat("0", 32), 129, 1},
-// 	{"0x3" + strings.Repeat("0", 32), 130, 0},
-// }
+	{"37" + strings.Repeat("0", 32), 31, 0},
+	{"37" + strings.Repeat("0", 32), 32, 7},
+	{"37" + strings.Repeat("0", 32), 33, 3},
+	{"37" + strings.Repeat("0", 32), 34, 0},
+}
 
-// func TestBit(t *testing.T) {
-// 	for i, test := range bitTests {
-// 		x := decFromString(test.x)
-// 		if got := x.bit(test.i); got != test.want {
-// 			t.Errorf("#%d: %s.bit(%d) = %v; want %v", i, test.x, test.i, got, test.want)
-// 		}
-// 	}
-// }
+func TestDecDigit(t *testing.T) {
+	for i, test := range decDigitTests {
+		x := decFromString(test.x)
+		if got := x.digit(test.i); got != test.want {
+			t.Errorf("#%d: %s.bit(%d) = %v; want %v", i, test.x, test.i, got, test.want)
+		}
+	}
+}
 
-var stickyTests = []struct {
+var decStickyTests = []struct {
 	x    string
 	i    uint
 	want uint
@@ -666,8 +666,8 @@ var stickyTests = []struct {
 	{"1" + strings.Repeat("0", 100), 101, 1},
 }
 
-func TestSticky(t *testing.T) {
-	for i, test := range stickyTests {
+func TestDecSticky(t *testing.T) {
+	for i, test := range decStickyTests {
 		x := decFromString(test.x)
 		if got := x.sticky(test.i); got != test.want {
 			t.Errorf("#%d: %s.sticky(%d) = %v; want %v", i, test.x, test.i, got, test.want)
@@ -683,7 +683,7 @@ func TestSticky(t *testing.T) {
 	}
 }
 
-func testSqr(t *testing.T, x dec) {
+func testDecSqr(t *testing.T, x dec) {
 	got := make(dec, 2*len(x))
 	want := make(dec, 2*len(x))
 	got = got.sqr(x)
@@ -693,16 +693,16 @@ func testSqr(t *testing.T, x dec) {
 	}
 }
 
-func TestSqr(t *testing.T) {
-	for _, a := range prodNN {
+func TestDecSqr(t *testing.T) {
+	for _, a := range decProdNN {
 		if a.x != nil {
-			testSqr(t, a.x)
+			testDecSqr(t, a.x)
 		}
 		if a.y != nil {
-			testSqr(t, a.y)
+			testDecSqr(t, a.y)
 		}
 		if a.z != nil {
-			testSqr(t, a.z)
+			testDecSqr(t, a.z)
 		}
 	}
 }
@@ -716,14 +716,14 @@ func benchmarkDecSqr(b *testing.B, nwords int) {
 	}
 }
 
-var sqrBenchSizes = []int{
+var decSqrBenchSizes = []int{
 	1, 2, 3, 5, 8, 10, 20, 30, 50, 80,
 	100, 200, 300, 500, 800,
 	1000, 10000, 100000,
 }
 
 func BenchmarkDecSqr(b *testing.B) {
-	for _, n := range sqrBenchSizes {
+	for _, n := range decSqrBenchSizes {
 		if isRaceBuilder && n > 1e3 {
 			continue
 		}
@@ -752,7 +752,7 @@ func BenchmarkDecSqr(b *testing.B) {
 // 	}
 // }
 
-func TestNatDiv(t *testing.T) {
+func TestDecDiv(t *testing.T) {
 	sizes := []int{
 		1, 2, 5, 8, 15, 25, 40, 65, 100,
 		200, 500, 800, 1500, 2500, 4000, 6500, 10000,

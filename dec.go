@@ -122,17 +122,40 @@ func (z dec) setUint64(x uint64) (dec, int32) {
 	return z, dig
 }
 
+func (x dec) toNat(z []Word) []Word {
+	if len(x) == 0 {
+		return dec(z)[:0]
+	}
+	if len(x) == 1 {
+		return dec(z).setWord(x[0])
+	}
+	// bits = x.digits() * Log10 / Log2  + 1
+	// words = (bits + _W - 1)/_W
+	z = dec(z).make((int(float64(x.digits())*log2_10) + _W) / _W)
+	zz := dec(nil).set(x)
+	for i := 0; i < len(z); i++ {
+		// r = zz & _B; zz = zz >> _W
+		var r Word
+		for j := len(zz) - 1; j >= 0; j-- {
+			zz[j], r = mulAddWWW(r, _BD, zz[j])
+		}
+		zz = zz.norm()
+		z[i] = r
+	}
+	return dec(z).norm()
+}
+
 // setInt sets z = x.mant
 func (z dec) setInt(x *big.Int) dec {
 	bb := x.Bits()
 	// TODO(db47h): here we cannot directly copy(b, bb)
+	// because big.Word != decimal.Word
 	b := make([]Word, len(bb))
 	for i := 0; i < len(b) && i < len(bb); i++ {
 		b[i] = Word(bb[i])
 	}
-	var i int
-	for i = 0; i < len(z); i++ {
-		z[i] = Word(divWVW(b, 0, b, _BD))
+	for i := 0; i < len(z); i++ {
+		z[i] = divWVW(b, 0, b, _BD)
 	}
 	z = z.norm()
 	return z
@@ -517,7 +540,7 @@ func (z dec) sqr(x dec) dec {
 	// 	basicSqr(z, x)
 	// 	return z.norm()
 	// }
-	// TODO(db47h): implement aratsuba algorithm
+	// TODO(db47h): implement karatsuba algorithm
 	// Use Karatsuba multiplication optimized for x == y.
 	// The algorithm and layout of z are the same as for mul.
 
@@ -645,107 +668,108 @@ func (z dec) mul(x, y dec) dec {
 	// return z.norm()
 }
 
+// If m != 0 (i.e., len(m) != 0), expNN sets z to x**y mod m;
+// otherwise it sets z to x**y. The result is the value of z.
 func (z dec) expNN(x, y, m dec) dec {
-	panic("not implemented")
+	if alias(z, x) || alias(z, y) {
+		// We cannot allow in-place modification of x or y.
+		z = nil
+	}
+
+	// x**y mod 1 == 0
+	if len(m) == 1 && m[0] == 1 {
+		return z.setWord(0)
+	}
+	// m == 0 || m > 1
+
+	// x**0 == 1
+	if len(y) == 0 {
+		return z.setWord(1)
+	}
+	// y > 0
+
+	// x**1 mod m == x mod m
+	if len(y) == 1 && y[0] == 1 && len(m) != 0 {
+		_, z = dec(nil).div(z, x, m)
+		return z
+	}
+	// y > 1
+
+	if len(m) != 0 {
+		// We likely end up being as long as the modulus.
+		z = z.make(len(m))
+	}
+	z = z.set(x)
+
+	// If the base is non-trivial and the exponent is large, we use
+	// 4-bit, windowed exponentiation. This involves precomputing 14 values
+	// (x^2...x^15) but then reduces the number of multiply-reduces by a
+	// third. Even for a 32-bit exponent, this reduces the number of
+	// operations. Uses Montgomery method for odd moduli.
+	// TODO(db47h): implement montgomery & windowed algorithms
+	// if x.cmp(decOne) > 0 && len(y) > 1 && len(m) > 0 {
+	// 	if m[0]&1 == 1 {
+	// 		return z.expNNMontgomery(x, y, m)
+	// 	}
+	// 	return z.expNNWindowed(x, y, m)
+	// }
+
+	// convert y from dec to base2 nat
+	// TODO(db47h): better way to do this?
+	yy := y.toNat(nil)
+
+	v := yy[len(yy)-1] // v > 0 because yy is normalized and y > 0
+	shift := nlz(v) + 1
+	v <<= shift
+	var q dec
+
+	const mask = 1 << (_W - 1)
+
+	// We walk through the bits of the exponent one by one. Each time we
+	// see a bit, we square, thus doubling the power. If the bit is a one,
+	// we also multiply by x, thus adding one to the power.
+
+	w := _W - int(shift)
+	// zz and r are used to avoid allocating in mul and div as
+	// otherwise the arguments would alias.
+	var zz, r dec
+	for j := 0; j < w; j++ {
+		zz = zz.sqr(z)
+		zz, z = z, zz
+
+		if v&mask != 0 {
+			zz = zz.mul(z, x)
+			zz, z = z, zz
+		}
+
+		if len(m) != 0 {
+			zz, r = zz.div(r, z, m)
+			zz, r, q, z = q, z, zz, r
+		}
+
+		v <<= 1
+	}
+
+	for i := len(yy) - 2; i >= 0; i-- {
+		v = yy[i]
+
+		for j := 0; j < _W; j++ {
+			zz = zz.sqr(z)
+			zz, z = z, zz
+
+			if v&mask != 0 {
+				zz = zz.mul(z, x)
+				zz, z = z, zz
+			}
+
+			if len(m) != 0 {
+				zz, r = zz.div(r, z, m)
+				zz, r, q, z = q, z, zz, r
+			}
+
+			v <<= 1
+		}
+	}
+
+	return z.norm()
 }
-
-// // If m != 0 (i.e., len(m) != 0), expNN sets z to x**y mod m;
-// // otherwise it sets z to x**y. The result is the value of z.
-// func (z dec) expNN(x, y, m dec) dec {
-// 	if alias(z, x) || alias(z, y) {
-// 		// We cannot allow in-place modification of x or y.
-// 		z = nil
-// 	}
-
-// 	// x**y mod 1 == 0
-// 	if len(m) == 1 && m[0] == 1 {
-// 		return z.setWord(0)
-// 	}
-// 	// m == 0 || m > 1
-
-// 	// x**0 == 1
-// 	if len(y) == 0 {
-// 		return z.setWord(1)
-// 	}
-// 	// y > 0
-
-// 	// x**1 mod m == x mod m
-// 	if len(y) == 1 && y[0] == 1 && len(m) != 0 {
-// 		_, z = dec(nil).div(z, x, m)
-// 		return z
-// 	}
-// 	// y > 1
-
-// 	if len(m) != 0 {
-// 		// We likely end up being as long as the modulus.
-// 		z = z.make(len(m))
-// 	}
-// 	z = z.set(x)
-
-// 	// If the base is non-trivial and the exponent is large, we use
-// 	// 4-bit, windowed exponentiation. This involves precomputing 14 values
-// 	// (x^2...x^15) but then reduces the number of multiply-reduces by a
-// 	// third. Even for a 32-bit exponent, this reduces the number of
-// 	// operations. Uses Montgomery method for odd moduli.
-// 	if x.cmp(decOne) > 0 && len(y) > 1 && len(m) > 0 {
-// 		if m[0]&1 == 1 {
-// 			return z.expNNMontgomery(x, y, m)
-// 		}
-// 		return z.expNNWindowed(x, y, m)
-// 	}
-
-// 	v := y[len(y)-1] // v > 0 because y is normalized and y > 0
-// 	shift := nlz(v) + 1
-// 	v <<= shift
-// 	var q nat
-
-// 	const mask = 1 << (_W - 1)
-
-// 	// We walk through the bits of the exponent one by one. Each time we
-// 	// see a bit, we square, thus doubling the power. If the bit is a one,
-// 	// we also multiply by x, thus adding one to the power.
-
-// 	w := _W - int(shift)
-// 	// zz and r are used to avoid allocating in mul and div as
-// 	// otherwise the arguments would alias.
-// 	var zz, r nat
-// 	for j := 0; j < w; j++ {
-// 		zz = zz.sqr(z)
-// 		zz, z = z, zz
-
-// 		if v&mask != 0 {
-// 			zz = zz.mul(z, x)
-// 			zz, z = z, zz
-// 		}
-
-// 		if len(m) != 0 {
-// 			zz, r = zz.div(r, z, m)
-// 			zz, r, q, z = q, z, zz, r
-// 		}
-
-// 		v <<= 1
-// 	}
-
-// 	for i := len(y) - 2; i >= 0; i-- {
-// 		v = y[i]
-
-// 		for j := 0; j < _W; j++ {
-// 			zz = zz.sqr(z)
-// 			zz, z = z, zz
-
-// 			if v&mask != 0 {
-// 				zz = zz.mul(z, x)
-// 				zz, z = z, zz
-// 			}
-
-// 			if len(m) != 0 {
-// 				zz, r = zz.div(r, z, m)
-// 				zz, r, q, z = q, z, zz, r
-// 			}
-
-// 			v <<= 1
-// 		}
-// 	}
-
-// 	return z.norm()
-// }

@@ -14,9 +14,10 @@ const (
 	_WD = _W * 30103 / 100000
 	// Decimal base for a word. 1e9 for 32 bits words and 1e19 for 64 bits
 	// words.
-	// TODO(db47h): We want this value to be a const. This is a dirty hack to
-	// avoid conditional compilation that will break if bits.UintSize>64
+	// We want this value to be a const. This is a dirty hack to avoid
+	// conditional compilation; it will break if bits.UintSize != 32 or 64
 	_BD = 9999999998000000000*(_WD/19) + 1000000000*(_WD/9)
+	_MD = _BD - 1
 )
 
 // dec is an unsigned integer x of the form
@@ -34,6 +35,7 @@ type dec []Word
 
 var (
 	decOne = dec{1}
+	decTen = dec{10}
 )
 
 func (z dec) clear() {
@@ -158,6 +160,60 @@ func (x dec) sticky(i uint) uint {
 	return 0
 }
 
+func (z dec) add(x, y dec) dec {
+	m := len(x)
+	n := len(y)
+
+	switch {
+	case m < n:
+		return z.add(y, x)
+	case m == 0:
+		// n == 0 because m >= n; result is 0
+		return z[:0]
+	case n == 0:
+		// result is x
+		return z.set(x)
+	}
+	// m > 0
+
+	z = z.make(m + 1)
+	c := add10VV(z[0:n], x, y)
+	if m > n {
+		c = add10VW(z[n:m], x[n:], c)
+	}
+	z[m] = c
+
+	return z.norm()
+}
+
+func (z dec) sub(x, y dec) dec {
+	m := len(x)
+	n := len(y)
+
+	switch {
+	case m < n:
+		panic("underflow")
+	case m == 0:
+		// n == 0 because m >= n; result is 0
+		return z[:0]
+	case n == 0:
+		// result is x
+		return z.set(x)
+	}
+	// m > 0
+
+	z = z.make(m)
+	c := sub10VV(z[0:n], x, y)
+	if m > n {
+		c = sub10VW(z[n:], x[n:], c)
+	}
+	if c != 0 {
+		panic("underflow")
+	}
+
+	return z.norm()
+}
+
 func (x dec) cmp(y dec) (r int) {
 	m := len(x)
 	n := len(y)
@@ -203,6 +259,166 @@ func (z dec) divW(x dec, y Word) (q dec, r Word) {
 	r = div10WVW(z, 0, x, y)
 	q = z.norm()
 	return
+}
+
+func (z dec) div(z2, u, v dec) (q, r dec) {
+	if len(v) == 0 {
+		panic("division by zero")
+	}
+
+	if u.cmp(v) < 0 {
+		q = z[:0]
+		r = z2.set(u)
+		return
+	}
+
+	if len(v) == 1 {
+		var r2 Word
+		q, r2 = z.divW(u, v[0])
+		r = z2.setWord(r2)
+		return
+	}
+
+	q, r = z.divLarge(z2, u, v)
+	return
+}
+
+// getDec returns a *dec of len n. The contents may not be zero.
+// The pool holds *dec to avoid allocation when converting to interface{}.
+func getDec(n int) *dec {
+	var z *dec
+	if v := decPool.Get(); v != nil {
+		z = v.(*dec)
+	}
+	if z == nil {
+		z = new(dec)
+	}
+	*z = z.make(n)
+	return z
+}
+
+func putDec(x *dec) {
+	decPool.Put(x)
+}
+
+var decPool sync.Pool
+
+// q = (uIn-r)/vIn, with 0 <= r < vIn
+// Uses z as storage for q, and u as storage for r if possible.
+// See Knuth, Volume 2, section 4.3.1, Algorithm D.
+// Preconditions:
+//    len(vIn) >= 2
+//    len(uIn) >= len(vIn)
+//    u must not alias z
+func (z dec) divLarge(u, uIn, vIn dec) (q, r dec) {
+	n := len(vIn)
+	m := len(uIn)
+
+	// D1.
+	d := _BD / (vIn[n-1] + 1)
+	// do not modify vIn, it may be used by another goroutine simultaneously
+	vp := getDec(n)
+	v := *vp
+	mulAdd10VWW(v, vIn, d, 0)
+
+	// u may safely alias uIn or vIn, the value of uIn is used to set u and vIn was already used
+	u = u.make(m + 1)
+	u[m] = mulAdd10VWW(u[:m], uIn, d, 0)
+
+	// z may safely alias uIn or vIn, both values were used already
+	if alias(z, u) {
+		z = nil // z is an alias for u - cannot reuse
+	}
+	q = z.make(m - n + 1)
+
+	// TODO(db47h): implement divRecursive
+	// if n < divRecursiveThreshold {
+	q.divBasic(u, v)
+	// } else {
+	// 	q.divRecursive(u, v)
+	// }
+	putDec(vp)
+
+	q = q.norm()
+	r, _ = u.divW(u, d)
+	r = r.norm()
+	return q, r
+}
+
+// divBasic performs word-by-word division of u by v.
+// The quotient is written in pre-allocated q.
+// The remainder overwrites input u.
+//
+// Precondition:
+// - len(q) >= len(u)-len(v)
+func (q dec) divBasic(u, v dec) {
+	n := len(v)
+	m := len(u) - n
+
+	qhatvp := getDec(n + 1)
+	qhatv := *qhatvp
+	// D2.
+	vn1 := v[n-1]
+	for j := m; j >= 0; j-- {
+		// D3.
+		qhat := Word(_MD)
+		var ujn Word
+		if j+n < len(u) {
+			ujn = u[j+n]
+		}
+		if ujn != vn1 {
+			var rhat Word
+			qhat, rhat = div10WW(ujn, u[j+n-1], vn1)
+			// x1 | x2 = q̂v_{n-2}
+			vn2 := v[n-2]
+			x1, x2 := mul10WW(qhat, vn2)
+			// test if q̂v_{n-2} > br̂ + u_{j+n-2}
+			ujn2 := u[j+n-2]
+			for greaterThan(x1, x2, rhat, ujn2) {
+				qhat--
+				prevRhat := rhat
+				rhat += vn1
+				// v[n-1] >= 0, so this tests for overflow.
+				if rhat < prevRhat {
+					break
+				}
+				x1, x2 = mul10WW(qhat, vn2)
+			}
+		}
+
+		// D4.
+		qhatv[n] = mulAdd10VWW(qhatv[0:n], v, qhat, 0)
+		qhl := len(qhatv)
+		if j+qhl > len(u) && qhatv[n] == 0 {
+			qhl--
+		}
+		c := sub10VV(u[j:j+qhl], u[j:], qhatv)
+		if c != 0 {
+			c := add10VV(u[j:j+n], u[j:], v)
+			u[j+n] += c
+			qhat--
+		}
+
+		if j == m && m == len(q) && qhat == 0 {
+			continue
+		}
+		q[j] = qhat
+	}
+
+	putDec(qhatvp)
+}
+
+// greaterThan reports whether (x1*_BD + x2) > (y1*_BD + y2)
+func greaterThan(x1, x2, y1, y2 Word) bool {
+	return x1 > y1 || x1 == y1 && x2 > y2
+}
+
+// modW returns x % d.
+func (x dec) modW(d Word) (r Word) {
+	for i := len(x) - 1; i >= 0; i-- {
+		_, r = div10WW(r, x[i], d)
+	}
+	return r
 }
 
 func (z dec) mulAddWW(x dec, y, r Word) dec {
@@ -266,26 +482,6 @@ func (z dec) shr(x dec, s uint) dec {
 
 	return z.norm()
 }
-
-// getDec returns a *dec of len n. The contents may not be zero.
-// The pool holds *dec to avoid allocation when converting to interface{}.
-func getDec(n int) *dec {
-	var z *dec
-	if v := decPool.Get(); v != nil {
-		z = v.(*dec)
-	}
-	if z == nil {
-		z = new(dec)
-	}
-	*z = z.make(n)
-	return z
-}
-
-func putDec(x *dec) {
-	decPool.Put(x)
-}
-
-var decPool sync.Pool
 
 // Operands that are shorter than basicSqrThreshold are squared using
 // "grade school" multiplication; for operands longer than karatsubaSqrThreshold
@@ -448,3 +644,108 @@ func (z dec) mul(x, y dec) dec {
 
 	// return z.norm()
 }
+
+func (z dec) expNN(x, y, m dec) dec {
+	panic("not implemented")
+}
+
+// // If m != 0 (i.e., len(m) != 0), expNN sets z to x**y mod m;
+// // otherwise it sets z to x**y. The result is the value of z.
+// func (z dec) expNN(x, y, m dec) dec {
+// 	if alias(z, x) || alias(z, y) {
+// 		// We cannot allow in-place modification of x or y.
+// 		z = nil
+// 	}
+
+// 	// x**y mod 1 == 0
+// 	if len(m) == 1 && m[0] == 1 {
+// 		return z.setWord(0)
+// 	}
+// 	// m == 0 || m > 1
+
+// 	// x**0 == 1
+// 	if len(y) == 0 {
+// 		return z.setWord(1)
+// 	}
+// 	// y > 0
+
+// 	// x**1 mod m == x mod m
+// 	if len(y) == 1 && y[0] == 1 && len(m) != 0 {
+// 		_, z = dec(nil).div(z, x, m)
+// 		return z
+// 	}
+// 	// y > 1
+
+// 	if len(m) != 0 {
+// 		// We likely end up being as long as the modulus.
+// 		z = z.make(len(m))
+// 	}
+// 	z = z.set(x)
+
+// 	// If the base is non-trivial and the exponent is large, we use
+// 	// 4-bit, windowed exponentiation. This involves precomputing 14 values
+// 	// (x^2...x^15) but then reduces the number of multiply-reduces by a
+// 	// third. Even for a 32-bit exponent, this reduces the number of
+// 	// operations. Uses Montgomery method for odd moduli.
+// 	if x.cmp(decOne) > 0 && len(y) > 1 && len(m) > 0 {
+// 		if m[0]&1 == 1 {
+// 			return z.expNNMontgomery(x, y, m)
+// 		}
+// 		return z.expNNWindowed(x, y, m)
+// 	}
+
+// 	v := y[len(y)-1] // v > 0 because y is normalized and y > 0
+// 	shift := nlz(v) + 1
+// 	v <<= shift
+// 	var q nat
+
+// 	const mask = 1 << (_W - 1)
+
+// 	// We walk through the bits of the exponent one by one. Each time we
+// 	// see a bit, we square, thus doubling the power. If the bit is a one,
+// 	// we also multiply by x, thus adding one to the power.
+
+// 	w := _W - int(shift)
+// 	// zz and r are used to avoid allocating in mul and div as
+// 	// otherwise the arguments would alias.
+// 	var zz, r nat
+// 	for j := 0; j < w; j++ {
+// 		zz = zz.sqr(z)
+// 		zz, z = z, zz
+
+// 		if v&mask != 0 {
+// 			zz = zz.mul(z, x)
+// 			zz, z = z, zz
+// 		}
+
+// 		if len(m) != 0 {
+// 			zz, r = zz.div(r, z, m)
+// 			zz, r, q, z = q, z, zz, r
+// 		}
+
+// 		v <<= 1
+// 	}
+
+// 	for i := len(y) - 2; i >= 0; i-- {
+// 		v = y[i]
+
+// 		for j := 0; j < _W; j++ {
+// 			zz = zz.sqr(z)
+// 			zz, z = z, zz
+
+// 			if v&mask != 0 {
+// 				zz = zz.mul(z, x)
+// 				zz, z = z, zz
+// 			}
+
+// 			if len(m) != 0 {
+// 				zz, r = zz.div(r, z, m)
+// 				zz, r, q, z = q, z, zz, r
+// 			}
+
+// 			v <<= 1
+// 		}
+// 	}
+
+// 	return z.norm()
+// }

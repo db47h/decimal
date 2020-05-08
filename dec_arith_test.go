@@ -1,11 +1,9 @@
 package decimal
 
 import (
-	"math/rand"
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 )
 
 func TestAdd10VW(t *testing.T) {
@@ -38,9 +36,8 @@ func TestAdd10VW(t *testing.T) {
 }
 
 func TestDecDigits(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
-		n := uint(rand.Uint64())
+		n := uint(rnd.Uint64())
 		d := uint(0)
 		for m := n; m != 0; m /= 10 {
 			d++
@@ -52,8 +49,19 @@ func TestDecDigits(t *testing.T) {
 }
 
 func BenchmarkDecDigits(b *testing.B) {
-	rand.Seed(0xdeadbeefbadf00d)
 	for i := 0; i < b.N; i++ {
-		benchU = decDigits(uint(rand.Uint64()) % _BD)
+		benchU = decDigits(uint(rnd.Uint64()) % _BD)
 	}
+}
+
+func rnd10W() Word {
+	return Word(rnd.Uint64() % _BD)
+}
+
+func rnd10V(n int) []Word {
+	v := make([]Word, n)
+	for i := range v {
+		v[i] = rnd10W()
+	}
+	return v
 }

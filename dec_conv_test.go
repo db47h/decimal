@@ -5,6 +5,7 @@
 package decimal
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -360,27 +361,27 @@ func BenchmarkDecStringPiParallel(b *testing.B) {
 // 	}
 // }
 
-// func BenchmarkString(b *testing.B) {
-// 	const x = 10
-// 	for _, base := range []int{2, 8, 10, 16} {
-// 		for _, y := range []Word{10, 100, 1000, 10000, 100000} {
-// 			if isRaceBuilder && y > 1000 {
-// 				continue
-// 			}
-// 			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
-// 				b.StopTimer()
-// 				var z dec
-// 				z = z.expWW(x, y)
-// 				z.utoa(base) // warm divisor cache
-// 				b.StartTimer()
+func BenchmarkString(b *testing.B) {
+	const x = 10
+	for _, base := range []int{2, 8, 10, 16} {
+		for _, y := range []Word{10, 100, 1000, 10000, 100000} {
+			if isRaceBuilder && y > 1000 {
+				continue
+			}
+			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
+				b.StopTimer()
+				var z dec
+				z = z.expWW(x, y)
+				z.utoa(base) // warm divisor cache
+				b.StartTimer()
 
-// 				for i := 0; i < b.N; i++ {
-// 					_ = z.utoa(base)
-// 				}
-// 			})
-// 		}
-// 	}
-// }
+				for i := 0; i < b.N; i++ {
+					_ = z.utoa(base)
+				}
+			})
+		}
+	}
+}
 
 // func BenchmarkLeafSize(b *testing.B) {
 // 	for n := 0; n <= 16; n++ {

@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 )
 
 var benchU uint
@@ -32,7 +31,6 @@ var intData = []struct {
 }
 
 func TestDnorm(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10000; i++ {
 	again:
 		w := uint(rand.Uint64()) % _BD
@@ -99,7 +97,6 @@ func TestDecimal_SetString(t *testing.T) {
 }
 
 func BenchmarkDnorm(b *testing.B) {
-	rand.Seed(0xdeadbeefbadf00d)
 	d := dec(nil).make(1000)
 	for i := range d {
 		d[i] = Word(rand.Uint64()) % _BD

@@ -271,6 +271,11 @@ type decDivisor struct {
 	ndigits int // digit length of divisor in terms of output base digits
 }
 
+// expWW computes x**y
+func (z dec) expWW(x, y Word) dec {
+	return z.expNN(dec(nil).setWord(x), dec(nil).setWord(y), nil)
+}
+
 func divisors(m int, b Word, ndigits int, bb Word) []decDivisor {
 	return nil
 }

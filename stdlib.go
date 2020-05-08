@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/bits"
+	"math/rand"
 	"strconv"
 )
 
@@ -86,7 +87,7 @@ func makeAcc(above bool) Accuracy {
 type Word uint
 
 const (
-	// _S = _W / 8 // word size in bytes
+	_S = _W / 8 // word size in bytes
 
 	_W = bits.UintSize // word size in bits
 	// _B = 1 << _W       // digit base
@@ -138,6 +139,12 @@ func mulAddWWW(x, y, c Word) (z1, z0 Word) {
 	var cc uint
 	lo, cc = bits.Add(lo, uint(c), 0)
 	return Word(hi + cc), Word(lo)
+}
+
+// z1<<_W + z0 = x*y
+func mulWW(x, y Word) (z1, z0 Word) {
+	hi, lo := bits.Mul(uint(x), uint(y))
+	return Word(hi), Word(lo)
 }
 
 func same(x, y []Word) bool {
@@ -272,3 +279,8 @@ type ErrNaN struct {
 func (err ErrNaN) Error() string {
 	return err.msg
 }
+
+var rnd = rand.New(rand.NewSource(0))
+
+// TODO(db47h): set this to false
+const isRaceBuilder = true

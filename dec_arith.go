@@ -45,7 +45,7 @@ func decDigits32(x uint) (n uint) {
 	return n
 }
 
-func nldz(x Word) uint {
+func nlz10(x Word) uint {
 	if bits.UintSize == 32 {
 		return _WD - decDigits32(uint(x))
 	}
@@ -159,32 +159,39 @@ func decMaxPow(b Word) (p Word, n int) {
 
 // add10VW adds y to x. The resulting carry c is either 0 or 1.
 func add10VW(z, x dec, y Word) (c Word) {
-	z[0], c = add10WW(x[0], y)
+	z[0], c = add10WWW(x[0], y, 0)
 	// propagate carry
 	for i := 1; i < len(z) && i < len(x); i++ {
 		s := x[i] + c
-		if s >= _BD {
-			z[i] = 0
-			continue
-		}
-		// c = 0 from this point
-		z[i] = s
-		// copy remaining digits if not adding in-place
-		if !same(z, x) {
+		if s < _BD {
+			z[i] = s
+			// copy remaining digits
 			copy(z[i+1:], x[i+1:])
+			return 0
 		}
-		return 0
+		z[i] = 0
 	}
-	return c
+	return
 }
 
 func div10WVW(z []Word, xn Word, x []Word, y Word) (r Word) {
 	r = xn
 	for i := len(z) - 1; i >= 0; i-- {
-		h, l := mulAddWWW(r, _BD, x[i])
-		z[i], r = divWW(h, l, y)
+		z[i], r = div10WW(r, x[i], y)
 	}
 	return
+}
+
+// q = (u1<<_W + u0 - r)/v
+func div10WW(u1, u0, v Word) (q, r Word) {
+	// q < _BD if u1 < v < _BD
+	if debugDecimal && !(u1 < v && v < _BD) {
+		panic("decimal overflow")
+	}
+	// convert to base 2
+	hi, lo := mulAddWWW(u1, _BD, u0)
+	// q = (u-r)/v. Since v < _BD => r < _BD
+	return divWW(hi, lo, v)
 }
 
 func mulAdd10VWW(z, x []Word, y, r Word) (c Word) {
@@ -212,11 +219,11 @@ func mul10WW(x, y Word) (z1, z0 Word) {
 	return Word(hi), Word(lo)
 }
 
-func add10WW(x, y Word) (s, c Word) {
-	r, cc := bits.Add(uint(x), uint(y), 0)
-	if r >= _BD {
-		r -= _BD
+func add10WWW(x, y, cIn Word) (s, c Word) {
+	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
+	if cc != 0 || r >= _BD {
 		cc = 1
+		r -= _BD
 	}
 	return Word(r), Word(cc)
 }
@@ -228,6 +235,45 @@ func addMul10VVW(z, x []Word, y Word) (c Word) {
 		lo, cc := bits.Add(uint(z0), uint(c), 0)
 		// convert to base _BD
 		c, z[i] = divWW(hi+Word(cc), Word(lo), _BD)
+	}
+	return
+}
+
+// The resulting carry c is either 0 or 1.
+func add10VV(z, x, y []Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
+		z[i], c = add10WWW(x[i], y[i], c)
+	}
+	return
+}
+
+func sub10WWW(x, y, b Word) (d, c Word) {
+	dd, cc := bits.Sub(uint(x), uint(y), uint(b))
+	if cc != 0 {
+		dd += _BD
+	}
+	return Word(dd), Word(cc)
+}
+
+// The resulting carry c is either 0 or 1.
+func sub10VV(z, x, y []Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
+		z[i], c = sub10WWW(x[i], y[i], c)
+	}
+	return
+}
+
+func sub10VW(z, x []Word, y Word) (c Word) {
+	c = y
+	for i := 0; i < len(z) && i < len(x); i++ {
+		zi, cc := bits.Sub(uint(x[i]), uint(c), 0)
+		c = Word(cc)
+		if c == 0 {
+			z[i] = Word(zi)
+			copy(z[i+1:], x[i+1:])
+			return
+		}
+		z[i] = Word(zi + _BD)
 	}
 	return
 }

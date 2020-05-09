@@ -35,6 +35,7 @@ type dec []Word
 
 var (
 	decOne = dec{1}
+	decTwo = dec{2}
 	decTen = dec{10}
 )
 
@@ -699,7 +700,6 @@ func (z dec) expNN(x, y, m dec) dec {
 		// We likely end up being as long as the modulus.
 		z = z.make(len(m))
 	}
-	z = z.set(x)
 
 	// If the base is non-trivial and the exponent is large, we use
 	// 4-bit, windowed exponentiation. This involves precomputing 14 values
@@ -715,13 +715,22 @@ func (z dec) expNN(x, y, m dec) dec {
 	// }
 
 	// convert y from dec to base2 nat
-	// TODO(db47h): better way to do this?
-	yy := y.toNat(nil)
+	yy := y.toNat(make([]Word, 1))
 
 	v := yy[len(yy)-1] // v > 0 because yy is normalized and y > 0
 	shift := nlz(v) + 1
 	v <<= shift
-	var q dec
+
+	// zz and r are used to avoid allocating in mul and div as
+	// otherwise the arguments would alias.
+	var zz, r dec
+
+	// set x = x % m, this speeds up cases with large x even if len(y) == 1
+	if len(m) != 0 {
+		zz, r = zz.div(r, x, m)
+		x = dec(nil).set(r)
+	}
+	z = z.set(x)
 
 	const mask = 1 << (_W - 1)
 
@@ -730,9 +739,7 @@ func (z dec) expNN(x, y, m dec) dec {
 	// we also multiply by x, thus adding one to the power.
 
 	w := _W - int(shift)
-	// zz and r are used to avoid allocating in mul and div as
-	// otherwise the arguments would alias.
-	var zz, r dec
+
 	for j := 0; j < w; j++ {
 		zz = zz.sqr(z)
 		zz, z = z, zz
@@ -744,7 +751,7 @@ func (z dec) expNN(x, y, m dec) dec {
 
 		if len(m) != 0 {
 			zz, r = zz.div(r, z, m)
-			zz, r, q, z = q, z, zz, r
+			z, r = r, z
 		}
 
 		v <<= 1
@@ -764,7 +771,7 @@ func (z dec) expNN(x, y, m dec) dec {
 
 			if len(m) != 0 {
 				zz, r = zz.div(r, z, m)
-				zz, r, q, z = q, z, zz, r
+				z, r = r, z
 			}
 
 			v <<= 1

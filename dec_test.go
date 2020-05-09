@@ -543,6 +543,29 @@ func TestDecExpNN(t *testing.T) {
 	}
 }
 
+func BenchmarkDecExpNN(b *testing.B) {
+	for i, test := range decExpNNTests {
+		x := decFromString(test.x)
+		y := decFromString(test.y)
+		out := decFromString(test.out)
+
+		var m dec
+		if len(test.m) > 0 {
+			m = decFromString(test.m)
+		}
+
+		b.Run(fmt.Sprintf("#%d", i), func(b *testing.B) {
+			var z dec
+			for it := 0; it < b.N; it++ {
+				z = z.expNN(x, y, m)
+				if z.cmp(out) != 0 {
+					b.Fatalf("#%d got %s want %s", i, z.utoa(10), out.utoa(10))
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkDecExp3Power(b *testing.B) {
 	const x = 3
 	for _, y := range []Word{
@@ -784,5 +807,35 @@ func TestDecDiv(t *testing.T) {
 				t.Fatalf("wrong remainder: got %s; want %s for %s/%s", r.utoa(10), c.utoa(10), x.utoa(10), b.utoa(10))
 			}
 		}
+	}
+}
+
+// TODO(bd47h): move this to decimal_test
+func benchmarkDiv(b *testing.B, aSize, bSize int) {
+	aa := rndDec1(aSize)
+	// bb := rndDec1(bSize)
+	bb := dec(nil).setWord(Word(rnd.Intn(_W-1)) + 1)
+	if aa.cmp(bb) < 0 {
+		aa, bb = bb, aa
+	}
+	x := dec(nil)
+	y := dec(nil)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x.div(y, aa, bb)
+	}
+}
+
+func BenchmarkDiv(b *testing.B) {
+	sizes := []int{
+		10, 20, 50, 100, 200, 500, 1000,
+		// 1e4, 1e5, 1e6, 1e7,
+	}
+	for _, i := range sizes {
+		j := 2 * i
+		b.Run(fmt.Sprintf("%d/%d", j, i), func(b *testing.B) {
+			benchmarkDiv(b, j, i)
+		})
 	}
 }

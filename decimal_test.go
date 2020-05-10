@@ -36,7 +36,7 @@ func TestDnorm(t *testing.T) {
 		e := uint(rand.Intn(_DW + 1))
 		h, l := mulWW(Word(w), Word(pow10(e)))
 		// convert h, l from base _B (2**64) to base _BD (10**19) or 2**32 -> 10**9
-		h, l = divWDB(h, l)
+		h, l = div10W(h, l)
 		d := dec{Word(l), Word(h)}.norm()
 		if len(d) == 0 {
 			if w == 0 {

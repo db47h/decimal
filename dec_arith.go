@@ -67,50 +67,6 @@ func nlz10(x Word) uint {
 	return _DW - decDigits64(uint64(x))
 }
 
-// shl10VU sets z to x*(10**s), s < _WD
-func shl10VU(z, x dec, s uint) (r Word) {
-	if s == 0 {
-		copy(z, x)
-		return
-	}
-	if len(z) == 0 || len(x) == 0 {
-		return
-	}
-	d, m := Word(pow10(_DW-s)), Word(pow10(s))
-	var h, l Word
-	r, l = divWW(0, x[len(x)-1], d)
-	for i := len(z) - 1; i > 0; i-- {
-		t := l
-		h, l = divWW(0, x[i-1], d)
-		z[i] = t*m + h
-	}
-	z[0] = l * m
-
-	return r
-}
-
-// shr10VU sets z to x/(10**s)
-func shr10VU(z, x dec, s uint) (r Word) {
-	if s == 0 {
-		copy(z, x)
-		return
-	}
-	if len(z) == 0 || len(x) == 0 {
-		return
-	}
-
-	var h, l Word
-	d, m := Word(pow10(s)), Word(pow10(_DW-s))
-	h, r = divWW(0, x[0], Word(d))
-	for i := 1; i < len(z) && i < len(x); i++ {
-		t := h
-		h, l = divWW(0, x[i], d)
-		z[i-1] = t + l*m
-	}
-	z[len(z)-1] = h
-	return r
-}
-
 func decTrailingZeros(n uint) uint {
 	var d uint
 	if bits.UintSize > 32 {
@@ -172,9 +128,60 @@ func decMaxPow(b Word) (p Word, n int) {
 	return Word(decMaxPow64[i]), int(decMaxPow64[i+1])
 }
 
+//-----------------------------------------------------------------------------
+// Arithmetic primitives
+//
+
+// z1<<_W + z0 = x*y
+func mul10WW_g(x, y Word) (z1, z0 Word) {
+	hi, lo := bits.Mul(uint(x), uint(y))
+	return div10W_g(Word(hi), Word(lo))
+}
+
+// q = (u1<<_W + u0 - r)/v
+func div10WW_g(u1, u0, v Word) (q, r Word) {
+	// convert to base 2
+	hi, lo := mulAddWWW_g(u1, _DB, u0)
+	// q = (u-r)/v. Since v < _BD => r < _BD
+	return divWW_g(hi, lo, v)
+}
+
+func add10WWW_g(x, y, cIn Word) (s, c Word) {
+	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
+	if cc != 0 || r >= _DB {
+		cc = 1
+		r -= _DB
+	}
+	return Word(r), Word(cc)
+}
+
+// The resulting carry c is either 0 or 1.
+func add10VV_g(z, x, y []Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
+		z[i], c = add10WWW_g(x[i], y[i], c)
+	}
+	return
+}
+
+func sub10WWW_g(x, y, b Word) (d, c Word) {
+	dd, cc := bits.Sub(uint(x), uint(y), uint(b))
+	if cc != 0 {
+		dd += _DB
+	}
+	return Word(dd), Word(cc)
+}
+
+// The resulting carry c is either 0 or 1.
+func sub10VV_g(z, x, y []Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
+		z[i], c = sub10WWW_g(x[i], y[i], c)
+	}
+	return
+}
+
 // add10VW adds y to x. The resulting carry c is either 0 or 1.
-func add10VW(z, x dec, y Word) (c Word) {
-	z[0], c = add10WWW(x[0], y, 0)
+func add10VW_g(z, x dec, y Word) (c Word) {
+	z[0], c = add10WWW_g(x[0], y, 0)
 	// propagate carry
 	for i := 1; i < len(z) && i < len(x); i++ {
 		s := x[i] + c
@@ -189,15 +196,97 @@ func add10VW(z, x dec, y Word) (c Word) {
 	return
 }
 
-func div10WVW(z []Word, xn Word, x []Word, y Word) (r Word) {
-	r = xn
-	for i := len(z) - 1; i >= 0; i-- {
-		z[i], r = div10WW(r, x[i], y)
+func sub10VW_g(z, x []Word, y Word) (c Word) {
+	c = y
+	for i := 0; i < len(z) && i < len(x); i++ {
+		zi, cc := bits.Sub(uint(x[i]), uint(c), 0)
+		c = Word(cc)
+		if c == 0 {
+			z[i] = Word(zi)
+			copy(z[i+1:], x[i+1:])
+			return
+		}
+		z[i] = Word(zi + _DB)
 	}
 	return
 }
 
-// divWDB returns the quotient and remainder of a double-Word n divided by _DB:
+// shl10VU sets z to x*(10**s), s < _WD
+func shl10VU_g(z, x dec, s uint) (r Word) {
+	if s == 0 {
+		copy(z, x)
+		return
+	}
+	if len(z) == 0 || len(x) == 0 {
+		return
+	}
+	d, m := Word(pow10(_DW-s)), Word(pow10(s))
+	var h, l Word
+	r, l = divWW(0, x[len(x)-1], d)
+	for i := len(z) - 1; i > 0; i-- {
+		t := l
+		h, l = divWW(0, x[i-1], d)
+		z[i] = t*m + h
+	}
+	z[0] = l * m
+
+	return r
+}
+
+// shr10VU sets z to x/(10**s)
+func shr10VU_g(z, x dec, s uint) (r Word) {
+	if s == 0 {
+		copy(z, x)
+		return
+	}
+	if len(z) == 0 || len(x) == 0 {
+		return
+	}
+
+	var h, l Word
+	d, m := Word(pow10(s)), Word(pow10(_DW-s))
+	h, r = divWW(0, x[0], Word(d))
+	for i := 1; i < len(z) && i < len(x); i++ {
+		t := h
+		h, l = divWW(0, x[i], d)
+		z[i-1] = t + l*m
+	}
+	z[len(z)-1] = h
+	return r
+}
+
+func mulAdd10VWW_g(z, x []Word, y, r Word) (c Word) {
+	c = r
+	// The comment near the top of this file discusses this for loop condition.
+	for i := 0; i < len(z) && i < len(x); i++ {
+		hi, lo := mulAddWWW_g(x[i], y, c)
+		c, z[i] = div10W_g(hi, lo)
+	}
+	return
+}
+
+func addMul10VVW_g(z, x []Word, y Word) (c Word) {
+	for i := 0; i < len(z) && i < len(x); i++ {
+		// do x[i] * y + c in base 2 => (hi+cc) * 2**_W + lo
+		hi, z0 := mulAddWWW_g(x[i], y, z[i])
+		lo, cc := bits.Add(uint(z0), uint(c), 0)
+		c, z[i] = div10W_g(hi+Word(cc), Word(lo))
+	}
+	return
+}
+
+func div10WVW_g(z []Word, xn Word, x []Word, y Word) (r Word) {
+	r = xn
+	for i := len(z) - 1; i >= 0; i-- {
+		// z[i], r = div10WW(r, x[i], y)
+		// FORCE INLINE
+		hi, lo := mulAddWWW_g(r, _DB, x[i])
+		z[i], r = divWW_g(hi, lo, y)
+	}
+	return
+}
+
+// div10W_g returns the quotient and remainder of a double-Word n divided by _DB:
 //
 // q = n/_DB, r = n%_DB
 //
@@ -215,7 +304,7 @@ func div10WVW(z []Word, xn Word, x []Word, y Word) (r Word) {
 // is a no-op. In the comments below, these have been removed for the sake of
 // clarity.
 //
-func divWDB(n1, n0 Word) (q, r Word) {
+func div10W_g(n1, n0 Word) (q, r Word) {
 	const (
 		N     = _W
 		d     = _DB
@@ -236,109 +325,16 @@ func divWDB(n1, n0 Word) (q, r Word) {
 	nAdj := n10 + (_n1 & dNorm)
 
 	// q1 = n2 + HIGH(mP * (n2-_n1) + nAdj)
-	q1, _ := mulAddWWW(mP, n2-_n1, nAdj)
+	q1, _ := mulAddWWW_g(mP, n2-_n1, nAdj)
 	q1 += n2
 	// dr = 2**N*n1 + n0 - 2**N*d + (-1-q1)*d
 	//    = (-1-q1) * d + n0 +           (1)
 	//      2**N * (n1 - d)              (2)
 	// let t = -1 - q1 = (^q1 + 1) - 1 = ^q1
 	t := ^q1
-	drHi, drLo := mulAddWWW(t, d, n0) // (1)
-	drHi += n1 - d                    // (2)
+	drHi, drLo := mulAddWWW_g(t, d, n0) // (1)
+	drHi += n1 - d                      // (2)
 	// q = drHi - (-1-q1)
 	// r = drLow + (d & drHi)
 	return drHi - t, drLo + d&drHi
-}
-
-// q = (u1<<_W + u0 - r)/v
-func div10WW(u1, u0, v Word) (q, r Word) {
-	// q < _BD if u1 < v < _BD
-	if debugDecimal && !(u1 < v && v < _DB) {
-		panic("decimal: integer overflow")
-	}
-	// convert to base 2
-	hi, lo := mulAddWWW(u1, _DB, u0)
-	// q = (u-r)/v. Since v < _BD => r < _BD
-	return divWW(hi, lo, v)
-}
-
-func mulAdd10VWW(z, x []Word, y, r Word) (c Word) {
-	c = r
-	// The comment near the top of this file discusses this for loop condition.
-	for i := 0; i < len(z) && i < len(x); i++ {
-		c, z[i] = mulAdd10WWW(x[i], y, c)
-	}
-	return
-}
-
-// z1*_BD + z0 = x*y + c
-func mulAdd10WWW(x, y, c Word) (z1, z0 Word) {
-	hi, lo := bits.Mul(uint(x), uint(y))
-	var cc uint
-	lo, cc = bits.Add(lo, uint(c), 0)
-	return divWDB(Word(hi+cc), Word(lo))
-}
-
-// z1<<_W + z0 = x*y
-func mul10WW(x, y Word) (z1, z0 Word) {
-	hi, lo := bits.Mul(uint(x), uint(y))
-	return divWDB(Word(hi), Word(lo))
-}
-
-func add10WWW(x, y, cIn Word) (s, c Word) {
-	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
-	if cc != 0 || r >= _DB {
-		cc = 1
-		r -= _DB
-	}
-	return Word(r), Word(cc)
-}
-
-func addMul10VVW(z, x []Word, y Word) (c Word) {
-	for i := 0; i < len(z) && i < len(x); i++ {
-		// do x[i] * y + c in base 2 => (hi+cc) * 2**_W + lo
-		hi, z0 := mulAddWWW(x[i], y, z[i])
-		lo, cc := bits.Add(uint(z0), uint(c), 0)
-		c, z[i] = divWDB(hi+Word(cc), Word(lo))
-	}
-	return
-}
-
-// The resulting carry c is either 0 or 1.
-func add10VV(z, x, y []Word) (c Word) {
-	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
-		z[i], c = add10WWW(x[i], y[i], c)
-	}
-	return
-}
-
-func sub10WWW(x, y, b Word) (d, c Word) {
-	dd, cc := bits.Sub(uint(x), uint(y), uint(b))
-	if cc != 0 {
-		dd += _DB
-	}
-	return Word(dd), Word(cc)
-}
-
-// The resulting carry c is either 0 or 1.
-func sub10VV(z, x, y []Word) (c Word) {
-	for i := 0; i < len(z) && i < len(x) && i < len(y); i++ {
-		z[i], c = sub10WWW(x[i], y[i], c)
-	}
-	return
-}
-
-func sub10VW(z, x []Word, y Word) (c Word) {
-	c = y
-	for i := 0; i < len(z) && i < len(x); i++ {
-		zi, cc := bits.Sub(uint(x[i]), uint(c), 0)
-		c = Word(cc)
-		if c == 0 {
-			z[i] = Word(zi)
-			copy(z[i+1:], x[i+1:])
-			return
-		}
-		z[i] = Word(zi + _DB)
-	}
-	return
 }

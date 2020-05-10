@@ -7,13 +7,8 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/bits"
-	"math/rand"
 	"strconv"
 )
-
-// TODO(db47h): set this to false
-const isRaceBuilder = true
 
 const digits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -86,17 +81,6 @@ func makeAcc(above bool) Accuracy {
 	return Below
 }
 
-// A Word represents a single digit of a multi-precision unsigned integer.
-type Word uint
-
-const (
-	_S = _W / 8 // word size in bytes
-
-	_W = bits.UintSize // word size in bits
-	// _B = 1 << _W       // digit base
-	// _M = _B - 1        // digit mask
-)
-
 // byteReader is a local wrapper around fmt.ScanState;
 // it implements the ByteReader interface.
 type byteReader struct {
@@ -120,34 +104,6 @@ func umax32(x, y uint32) uint32 {
 		return x
 	}
 	return y
-}
-
-// q = (u1<<_W + u0 - r)/v
-func divWW(u1, u0, v Word) (q, r Word) {
-	qq, rr := bits.Div(uint(u1), uint(u0), uint(v))
-	return Word(qq), Word(rr)
-}
-
-func divWVW(z []Word, xn Word, x []Word, y Word) (r Word) {
-	r = xn
-	for i := len(z) - 1; i >= 0; i-- {
-		z[i], r = divWW(r, x[i], y)
-	}
-	return r
-}
-
-// z1<<_W + z0 = x*y + c
-func mulAddWWW(x, y, c Word) (z1, z0 Word) {
-	hi, lo := bits.Mul(uint(x), uint(y))
-	var cc uint
-	lo, cc = bits.Add(lo, uint(c), 0)
-	return Word(hi + cc), Word(lo)
-}
-
-// z1<<_W + z0 = x*y
-func mulWW(x, y Word) (z1, z0 Word) {
-	hi, lo := bits.Mul(uint(x), uint(y))
-	return Word(hi), Word(lo)
 }
 
 func same(x, y []Word) bool {
@@ -283,10 +239,4 @@ func (err ErrNaN) Error() string {
 	return err.msg
 }
 
-var rnd = rand.New(rand.NewSource(0))
-
-// nlz returns the number of leading zeros in x.
-// Wraps bits.LeadingZeros call for convenience.
-func nlz(x Word) uint {
-	return uint(bits.LeadingZeros(uint(x)))
-}
+type nat []Word

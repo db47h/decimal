@@ -126,7 +126,7 @@ func (x dec) toNat(z []Word) []Word {
 		// r = zz & _B; zz = zz >> _W
 		var r Word
 		for j := len(zz) - 1; j >= 0; j-- {
-			zz[j], r = mulAddWWW(r, _DB, zz[j])
+			zz[j], r = mulAddWWW_g(r, _DB, zz[j])
 		}
 		zz = zz.norm()
 		z[i] = r
@@ -382,10 +382,10 @@ func (q dec) divBasic(u, v dec) {
 		}
 		if ujn != vn1 {
 			var rhat Word
-			qhat, rhat = div10WW(ujn, u[j+n-1], vn1)
+			qhat, rhat = div10WW_g(ujn, u[j+n-1], vn1)
 			// x1 | x2 = q̂v_{n-2}
 			vn2 := v[n-2]
-			x1, x2 := mul10WW(qhat, vn2)
+			x1, x2 := mul10WW_g(qhat, vn2)
 			// test if q̂v_{n-2} > br̂ + u_{j+n-2}
 			ujn2 := u[j+n-2]
 			for greaterThan(x1, x2, rhat, ujn2) {
@@ -396,7 +396,7 @@ func (q dec) divBasic(u, v dec) {
 				if rhat < prevRhat {
 					break
 				}
-				x1, x2 = mul10WW(qhat, vn2)
+				x1, x2 = mul10WW_g(qhat, vn2)
 			}
 		}
 
@@ -430,7 +430,7 @@ func greaterThan(x1, x2, y1, y2 Word) bool {
 // modW returns x % d.
 func (x dec) modW(d Word) (r Word) {
 	for i := len(x) - 1; i >= 0; i-- {
-		_, r = div10WW(r, x[i], d)
+		_, r = div10WW_g(r, x[i], d)
 	}
 	return r
 }
@@ -512,7 +512,7 @@ func (z dec) sqr(x dec) dec {
 	case n == 1:
 		d := x[0]
 		z = z.make(2)
-		z[1], z[0] = mul10WW(d, d)
+		z[1], z[0] = mul10WW_g(d, d)
 		return z.norm()
 	}
 

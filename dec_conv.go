@@ -111,7 +111,7 @@ func (z dec) scan(r io.ByteScanner, base int, fracOk bool) (res dec, b, count in
 
 			// if di is "full", add it to the result
 			if i == n {
-				if bn == _BD {
+				if bn == _DB {
 					// shift left by _WD digits
 					t := z.make(len(z) + 1)
 					copy(t[1:], z)
@@ -233,7 +233,7 @@ func (q dec) convertWords(s []byte, b Word, ndigits int, bb Word, table []decDiv
 		for len(q) > 0 {
 			// extract least significant, base bb "digit"
 			r = q[0]
-			q = q.shr(q, _WD)
+			q = q.shr(q, _DW)
 			for j := 0; j < ndigits && i > 0; j++ {
 				i--
 				// avoid % computation since r%10 == r - int(r/10)*10;

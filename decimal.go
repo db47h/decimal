@@ -120,7 +120,7 @@ func (x *Decimal) MinPrec() uint {
 	if x.form != finite {
 		return 0
 	}
-	return uint(len(x.mant))*_WD - x.mant.ntz()
+	return uint(len(x.mant))*_DW - x.mant.ntz()
 }
 
 // Mode returns the rounding mode of x.
@@ -258,9 +258,9 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 		return z
 	}
 	// x != 0
-	z.mant = z.mant.make((int(prec) + _WD - 1) / _WD).setInt(x)
+	z.mant = z.mant.make((int(prec) + _DW - 1) / _DW).setInt(x)
 	exp := dnorm(z.mant)
-	z.setExpAndRound(int64(len(z.mant))*_WD-exp, 0)
+	z.setExpAndRound(int64(len(z.mant))*_DW-exp, 0)
 	return z
 }
 
@@ -432,8 +432,8 @@ func (x *Decimal) validate() {
 	if m == 0 {
 		panic("nonzero finite number with empty mantissa")
 	}
-	if msw := x.mant[m-1]; !(_BD/10 <= msw && msw < _BD) {
-		panic(fmt.Sprintf("last word of %s is not within [%d %d)", x.Text('e', 0), uint(_BD/10), uint(_BD)))
+	if msw := x.mant[m-1]; !(_DB/10 <= msw && msw < _DB) {
+		panic(fmt.Sprintf("last word of %s is not within [%d %d)", x.Text('e', 0), uint(_DB/10), uint(_DB)))
 	}
 	if x.prec == 0 {
 		panic("zero precision finite number")
@@ -473,7 +473,7 @@ func (z *Decimal) round(sbit uint) {
 	// z.form == finite && len(z.mant) > 0
 	// m > 0 implies z.prec > 0 (checked by validate)
 	m := uint32(len(z.mant)) // present mantissa length in words
-	digits := m * _WD
+	digits := m * _DW
 	if digits <= z.prec {
 		// mantissa fits => nothing to do
 		return
@@ -490,14 +490,14 @@ func (z *Decimal) round(sbit uint) {
 	}
 	sbit &= 1 // be safe and ensure it's a single bit	// cut off extra words
 
-	n := (z.prec + (_WD - 1)) / _WD // mantissa length in words for desired precision
+	n := (z.prec + (_DW - 1)) / _DW // mantissa length in words for desired precision
 	if m > n {
 		copy(z.mant, z.mant[m-n:]) // move n last words to front
 		z.mant = z.mant[:n]
 	}
 
 	// determine number of trailing zero digits (ntz) and compute lsd of mantissa's least-significant word
-	ntz := uint(n*_WD - z.prec) // 0 <= ntz < _W
+	ntz := uint(n*_DW - z.prec) // 0 <= ntz < _W
 	lsd := pow10(ntz)
 
 	// round if result is inexact
@@ -535,7 +535,7 @@ func (z *Decimal) round(sbit uint) {
 				z.exp++
 				// mantissa overflow means that the mantissa before increment
 				// was all nines. In that case, the result is 1**(z.exp+1)
-				z.mant[n-1] = _BD / 10
+				z.mant[n-1] = _DB / 10
 			}
 		}
 	}
@@ -555,7 +555,7 @@ func dnorm(m dec) int64 {
 	if debugDecimal && (len(m) == 0 || m[len(m)-1] == 0) {
 		panic("msw of mantissa is 0")
 	}
-	s := _WD - decDigits(uint(m[len(m)-1]))
+	s := _DW - decDigits(uint(m[len(m)-1]))
 	// partial shift
 	if s > 0 {
 		c := shl10VU(m, m, s)

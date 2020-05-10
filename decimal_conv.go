@@ -27,7 +27,7 @@ func (z *Decimal) SetString(s string) (*Decimal, bool) {
 func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error) {
 	prec := z.prec
 	if prec == 0 {
-		prec = _WD
+		prec = _DW
 	}
 
 	// A reasonable value in case of an error.
@@ -77,7 +77,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 
 	// normalize mantissa and determine initial exponent contributions
 	exp2 := int64(0)
-	exp10 := int64(len(z.mant))*_WD - dnorm(z.mant)
+	exp10 := int64(len(z.mant))*_DW - dnorm(z.mant)
 
 	// determine binary or decimal exponent contribution of radix point
 	if fcount < 0 {
@@ -130,7 +130,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 	// exp2 != 0
 
 	// // apply 2**exp2
-	p := new(Decimal).SetPrec(z.Prec() + _WD) // use more bits for p -- TODO(db47h) what is the right number?
+	p := new(Decimal).SetPrec(z.Prec() + _DW) // use more bits for p -- TODO(db47h) what is the right number?
 	if exp2 < 0 {
 		z.Quo(z, p.pow2(uint64(-exp2)))
 	} else {
@@ -143,7 +143,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 // pow5 sets z to 5**n and returns z.
 // n must not be negative.
 func (z *Decimal) pow2(n uint64) *Decimal {
-	const m = _WD * 100000 / 30103 // maximum exponent such that 2**m < _BD
+	const m = _DW * 100000 / 30103 // maximum exponent such that 2**m < _BD
 	if n <= m {
 		return z.SetUint64(1 << n)
 	}
@@ -154,7 +154,7 @@ func (z *Decimal) pow2(n uint64) *Decimal {
 
 	// use more bits for f than for z
 	// TODO(db47h) what is the right number?
-	f := new(Decimal).SetPrec(z.Prec() + _WD).SetUint64(2)
+	f := new(Decimal).SetPrec(z.Prec() + _DW).SetUint64(2)
 
 	for n > 0 {
 		if n&1 != 0 {

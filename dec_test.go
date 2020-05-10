@@ -23,10 +23,10 @@ var decCmpTests = []struct {
 	{dec{0}, dec{1}, -1},
 	{dec{1}, dec{0}, 1},
 	{dec{1}, dec{1}, 0},
-	{dec{0, _MD}, dec{1}, 1},
-	{dec{1}, dec{0, _MD}, -1},
-	{dec{1, _MD}, dec{0, _MD}, 1},
-	{dec{0, _MD}, dec{1, _MD}, -1},
+	{dec{0, _DMax}, dec{1}, 1},
+	{dec{1}, dec{0, _DMax}, -1},
+	{dec{1, _DMax}, dec{0, _DMax}, 1},
+	{dec{0, _DMax}, dec{1, _DMax}, -1},
 	{dec{16, 571956, 8794, 68}, dec{837, 9146, 1, 754489}, -1},
 	{dec{34986, 41, 105, 1957}, dec{56, 7458, 104, 1957}, 1},
 }
@@ -51,7 +51,7 @@ var decSumNN = []decArgNN{
 	{dec{1111111110}, dec{123456789}, dec{987654321}},
 	{dec{0, 0, 0, 1}, nil, dec{0, 0, 0, 1}},
 	{dec{0, 0, 0, 1111111110}, dec{0, 0, 0, 123456789}, dec{0, 0, 0, 987654321}},
-	{dec{0, 0, 0, 1}, dec{0, 0, _MD}, dec{0, 0, 1}},
+	{dec{0, 0, 0, 1}, dec{0, 0, _DMax}, dec{0, 0, 1}},
 }
 
 var decProdNN = []decArgNN{
@@ -242,8 +242,8 @@ func BenchmarkDecMul(b *testing.B) {
 }
 
 func TestDecNLZ10(t *testing.T) {
-	var x Word = _MD
-	for i := 0; i <= _WD; i++ {
+	var x Word = _DMax
+	for i := 0; i <= _DW; i++ {
 		if int(nlz10(x)) != i {
 			t.Errorf("failed at %x: got %d want %d", x, nlz10(x), i)
 		}
@@ -262,8 +262,8 @@ var decLeftShiftTests = []decShiftTest{
 	{nil, 1, nil},
 	{decOne, 0, decOne},
 	{decOne, 1, decTen},
-	{dec{_BD / 10}, 1, dec{0}},
-	{dec{_BD / 10, 0}, 1, dec{0, 1}},
+	{dec{_DB / 10}, 1, dec{0}},
+	{dec{_DB / 10, 0}, 1, dec{0, 1}},
 }
 
 func TestDecShiftLeft(t *testing.T) {
@@ -285,8 +285,8 @@ var decRightShiftTests = []decShiftTest{
 	{decOne, 0, decOne},
 	{decOne, 1, nil},
 	{decTen, 1, decOne},
-	{dec{0, 1}, 1, dec{_BD / 10}},
-	{dec{10, 1, 1}, 1, dec{_BD/10 + 1, _BD / 10}},
+	{dec{0, 1}, 1, dec{_DB / 10}},
+	{dec{10, 1, 1}, 1, dec{_DB/10 + 1, _DB / 10}},
 }
 
 func TestDecShiftRight(t *testing.T) {
@@ -813,8 +813,7 @@ func TestDecDiv(t *testing.T) {
 // TODO(bd47h): move this to decimal_test
 func benchmarkDiv(b *testing.B, aSize, bSize int) {
 	aa := rndDec1(aSize)
-	// bb := rndDec1(bSize)
-	bb := dec(nil).setWord(Word(rnd.Intn(_W-1)) + 1)
+	bb := rndDec1(bSize)
 	if aa.cmp(bb) < 0 {
 		aa, bb = bb, aa
 	}
@@ -830,7 +829,7 @@ func benchmarkDiv(b *testing.B, aSize, bSize int) {
 func BenchmarkDiv(b *testing.B) {
 	sizes := []int{
 		10, 20, 50, 100, 200, 500, 1000,
-		// 1e4, 1e5, 1e6, 1e7,
+		1e4, 1e5, 1e6, 1e7,
 	}
 	for _, i := range sizes {
 		j := 2 * i

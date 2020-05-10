@@ -4,6 +4,21 @@ import (
 	"math/bits"
 )
 
+const (
+	// _W * log10(2) = decimal digits per word. 9 decimal digits per 32 bits
+	// word and 19 per 64 bits word.
+	_DW = _W * 30103 / 100000
+	// Decimal base for a word. 1e9 for 32 bits words and 1e19 for 64 bits
+	// words.
+	// We want this value to be a const. This is a dirty hack to avoid
+	// conditional compilation; it will break if bits.UintSize != 32 or 64
+	_DB = 9999999998000000000*(_DW/19) + 1000000000*(_DW/9)
+	// Maximum value of a decimal Word
+	_DMax = _DB - 1
+	// Bits per decimal Word: Log2(_DB)+1 = _DW * Log2(10) + 1
+	_DWb = _DW*100000/30103 + 1
+)
+
 var pow10s = [...]uint64{
 	1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000,
 	10000000000, 100000000000, 1000000000000, 10000000000000, 100000000000000, 1000000000000000,
@@ -47,9 +62,9 @@ func decDigits32(x uint) (n uint) {
 
 func nlz10(x Word) uint {
 	if bits.UintSize == 32 {
-		return _WD - decDigits32(uint(x))
+		return _DW - decDigits32(uint(x))
 	}
-	return _WD - decDigits64(uint64(x))
+	return _DW - decDigits64(uint64(x))
 }
 
 // shl10VU sets z to x*(10**s), s < _WD
@@ -61,7 +76,7 @@ func shl10VU(z, x dec, s uint) (r Word) {
 	if len(z) == 0 || len(x) == 0 {
 		return
 	}
-	d, m := Word(pow10(_WD-s)), Word(pow10(s))
+	d, m := Word(pow10(_DW-s)), Word(pow10(s))
 	var h, l Word
 	r, l = divWW(0, x[len(x)-1], d)
 	for i := len(z) - 1; i > 0; i-- {
@@ -85,7 +100,7 @@ func shr10VU(z, x dec, s uint) (r Word) {
 	}
 
 	var h, l Word
-	d, m := Word(pow10(s)), Word(pow10(_WD-s))
+	d, m := Word(pow10(s)), Word(pow10(_DW-s))
 	h, r = divWW(0, x[0], Word(d))
 	for i := 1; i < len(z) && i < len(x); i++ {
 		t := h
@@ -163,7 +178,7 @@ func add10VW(z, x dec, y Word) (c Word) {
 	// propagate carry
 	for i := 1; i < len(z) && i < len(x); i++ {
 		s := x[i] + c
-		if s < _BD {
+		if s < _DB {
 			z[i] = s
 			// copy remaining digits
 			copy(z[i+1:], x[i+1:])
@@ -182,14 +197,67 @@ func div10WVW(z []Word, xn Word, x []Word, y Word) (r Word) {
 	return
 }
 
+// divWDB returns the quotient and remainder of a double-Word n divided by _DB:
+//
+// q = n/_DB, r = n%_DB
+//
+// with the dividend bits' upper half in parameter n1 and the lower half in
+// parameter n0. divDecBase panics if n1 > _DMax (quotient overflow).
+//
+// This function uses the algorithm from "Division by invariant integers using
+// multiplication" by Torbjörn Granlund & Peter L. Montgomery.
+//
+// See https://doi.org/10.1145/773473.178249, section 8, Dividing udword by uword.
+//
+// On 386 and amd64, this is over 2 times faster than calling bits.Div(n1, n0, _BD).
+//
+// In the article, some equations show an addition or subtraction of 2**N, which
+// is a no-op. In the comments below, these have been removed for the sake of
+// clarity.
+//
+func divWDB(n1, n0 Word) (q, r Word) {
+	const (
+		N     = _W
+		d     = _DB
+		l     = _DWb
+		mP    = (1<<(N+l)-1)/d - 1<<N // m'
+		dNorm = d << (N - l)
+	)
+	if debugDecimal && n1 > _DMax {
+		panic("decimal: integer overflow")
+	}
+
+	// if N == 64, N == l => n2 == n1 && n10 == n0
+	// go vet complains, but this should be optimized out.
+	n2 := n1<<(N-l) + n0>>l
+	n10 := n0 << (N - l)
+	// -n1 = (n10 < 0 ? -1 : 0)
+	_n1 := Word(int(n10) >> (N - 1))
+	nAdj := n10 + (_n1 & dNorm)
+
+	// q1 = n2 + HIGH(mP * (n2-_n1) + nAdj)
+	q1, _ := mulAddWWW(mP, n2-_n1, nAdj)
+	q1 += n2
+	// dr = 2**N*n1 + n0 - 2**N*d + (-1-q1)*d
+	//    = (-1-q1) * d + n0 +           (1)
+	//      2**N * (n1 - d)              (2)
+	// let t = -1 - q1 = (^q1 + 1) - 1 = ^q1
+	t := ^q1
+	drHi, drLo := mulAddWWW(t, d, n0) // (1)
+	drHi += n1 - d                    // (2)
+	// q = drHi - (-1-q1)
+	// r = drLow + (d & drHi)
+	return drHi - t, drLo + d&drHi
+}
+
 // q = (u1<<_W + u0 - r)/v
 func div10WW(u1, u0, v Word) (q, r Word) {
 	// q < _BD if u1 < v < _BD
-	if debugDecimal && !(u1 < v && v < _BD) {
-		panic("decimal overflow")
+	if debugDecimal && !(u1 < v && v < _DB) {
+		panic("decimal: integer overflow")
 	}
 	// convert to base 2
-	hi, lo := mulAddWWW(u1, _BD, u0)
+	hi, lo := mulAddWWW(u1, _DB, u0)
 	// q = (u-r)/v. Since v < _BD => r < _BD
 	return divWW(hi, lo, v)
 }
@@ -208,22 +276,20 @@ func mulAdd10WWW(x, y, c Word) (z1, z0 Word) {
 	hi, lo := bits.Mul(uint(x), uint(y))
 	var cc uint
 	lo, cc = bits.Add(lo, uint(c), 0)
-	hi, lo = bits.Div(hi+cc, lo, _BD)
-	return Word(hi), Word(lo)
+	return divWDB(Word(hi+cc), Word(lo))
 }
 
 // z1<<_W + z0 = x*y
 func mul10WW(x, y Word) (z1, z0 Word) {
 	hi, lo := bits.Mul(uint(x), uint(y))
-	hi, lo = bits.Div(hi, lo, _BD)
-	return Word(hi), Word(lo)
+	return divWDB(Word(hi), Word(lo))
 }
 
 func add10WWW(x, y, cIn Word) (s, c Word) {
 	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
-	if cc != 0 || r >= _BD {
+	if cc != 0 || r >= _DB {
 		cc = 1
-		r -= _BD
+		r -= _DB
 	}
 	return Word(r), Word(cc)
 }
@@ -233,8 +299,7 @@ func addMul10VVW(z, x []Word, y Word) (c Word) {
 		// do x[i] * y + c in base 2 => (hi+cc) * 2**_W + lo
 		hi, z0 := mulAddWWW(x[i], y, z[i])
 		lo, cc := bits.Add(uint(z0), uint(c), 0)
-		// convert to base _BD
-		c, z[i] = divWW(hi+Word(cc), Word(lo), _BD)
+		c, z[i] = divWDB(hi+Word(cc), Word(lo))
 	}
 	return
 }
@@ -250,7 +315,7 @@ func add10VV(z, x, y []Word) (c Word) {
 func sub10WWW(x, y, b Word) (d, c Word) {
 	dd, cc := bits.Sub(uint(x), uint(y), uint(b))
 	if cc != 0 {
-		dd += _BD
+		dd += _DB
 	}
 	return Word(dd), Word(cc)
 }
@@ -273,7 +338,7 @@ func sub10VW(z, x []Word, y Word) (c Word) {
 			copy(z[i+1:], x[i+1:])
 			return
 		}
-		z[i] = Word(zi + _BD)
+		z[i] = Word(zi + _DB)
 	}
 	return
 }

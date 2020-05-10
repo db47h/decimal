@@ -2,7 +2,6 @@ package decimal
 
 import (
 	"math/big"
-	"math/bits"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -23,21 +22,21 @@ var intData = []struct {
 	{"1234567890123456789_0123456789012345678_9012345678901234567_8901234567890123456_78901234567890", 0, 90,
 		dec{7890123456789000000, 8901234567890123456, 9012345678901234567, 123456789012345678, 1234567890123456789},
 		90, 90},
-	{"1235", 0, 0, dec{1235000000000000000}, _WD, 4},
+	{"1235", 0, 0, dec{1235000000000000000}, _DW, 4},
 	{"1235", 0, 3, dec{1240000000000000000}, 3, 4},
 	{"1245", 0, 3, dec{1240000000000000000}, 3, 4},
 	{"12451", 0, 3, dec{1250000000000000000}, 3, 5},
-	{"0", 0, 0, nil, _WD, 0},
+	{"0", 0, 0, nil, _DW, 0},
 }
 
 func TestDnorm(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 	again:
-		w := uint(rand.Uint64()) % _BD
-		e := uint(rand.Intn(_WD + 1))
-		h, l := bits.Mul(w, pow10(e))
+		w := uint(rand.Uint64()) % _DB
+		e := uint(rand.Intn(_DW + 1))
+		h, l := mulWW(Word(w), Word(pow10(e)))
 		// convert h, l from base _B (2**64) to base _BD (10**19) or 2**32 -> 10**9
-		h, l = bits.Div(h, l, _BD)
+		h, l = divWDB(h, l)
 		d := dec{Word(l), Word(h)}.norm()
 		if len(d) == 0 {
 			if w == 0 {
@@ -48,8 +47,8 @@ func TestDnorm(t *testing.T) {
 		dd := dec(nil).set(d)
 		s := dnorm(dd)
 		// d should now have a single element with e shifted left
-		ew := w * pow10(_WD-decDigits(w))
-		es := int64(uint(len(d)*_WD) - (decDigits(w) + e))
+		ew := w * pow10(_DW-decDigits(w))
+		es := int64(uint(len(d)*_DW) - (decDigits(w) + e))
 		if dd[len(dd)-1] != Word(ew) || s != es {
 			t.Fatalf("%ve%v => dnorm(%v) = %v, %v --- Expected %d, %d",
 				w, e, d, dd, s, w, es)
@@ -99,11 +98,11 @@ func TestDecimal_SetString(t *testing.T) {
 func BenchmarkDnorm(b *testing.B) {
 	d := dec(nil).make(1000)
 	for i := range d {
-		d[i] = Word(rand.Uint64()) % _BD
+		d[i] = Word(rand.Uint64()) % _DB
 	}
 	for i := 0; i < b.N; i++ {
-		d[0] = Word(rand.Uint64()) % _BD
-		d[len(d)-1] = Word(rand.Uint64()) % _BD
+		d[0] = Word(rand.Uint64()) % _DB
+		d[len(d)-1] = Word(rand.Uint64()) % _DB
 		benchU = uint(dnorm(d))
 	}
 }

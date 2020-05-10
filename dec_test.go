@@ -810,6 +810,25 @@ func TestDecDiv(t *testing.T) {
 	}
 }
 
+// TestGoIssue37499 triggers the edge case of divBasic where the inaccurate
+// estimate of the first word's quotient happens at the very beginning of the
+// loop. See https://github.com/golang/go/issues/37499
+func TestGoIssue37499(t *testing.T) {
+	// Choose u and v such that v is slightly larger than u / 10**N.
+	// This tricks divBasic into choosing 1 as the first word
+	// of the quotient. This works in both 32-bit and 64-bit settings.
+	u := decFromString("923456789012345678912345678901234567891234567890123456789876543210987654321087654321098765432108765432109876543210")
+	v := decFromString("923456789012345678912345678901234567891234567890123456790")
+
+	q := dec(nil).make(len(u) - len(v) + 1)
+	q.divBasic(u, v)
+	q.norm()
+
+	if s := string(q.utoa(10)); s != "999999999999999999999999999999999999999999999999999999999" {
+		t.Fatalf("incorrect quotient: %s", s)
+	}
+}
+
 // TODO(bd47h): move this to decimal_test
 func benchmarkDiv(b *testing.B, aSize, bSize int) {
 	aa := rndDec1(aSize)

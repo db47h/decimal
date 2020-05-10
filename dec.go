@@ -345,7 +345,6 @@ func (z dec) divLarge(u, uIn, vIn dec) (q, r dec) {
 	}
 	q = z.make(m - n + 1)
 
-	// TODO(db47h): implement divRecursive
 	if n < divRecursiveThreshold {
 		q.divBasic(u, v)
 	} else {
@@ -364,7 +363,9 @@ func (z dec) divLarge(u, uIn, vIn dec) (q, r dec) {
 // The remainder overwrites input u.
 //
 // Precondition:
-// - len(q) >= len(u)-len(v)
+// - q is large enough to hold the quotient u / v
+//   which has a maximum length of len(u)-len(v)+1.
+// - v[len(v)-1] >= _DB/2
 func (q dec) divBasic(u, v dec) {
 	n := len(v)
 	m := len(u) - n
@@ -401,6 +402,8 @@ func (q dec) divBasic(u, v dec) {
 		}
 
 		// D4.
+		// Compute the remainder u - (q̂*v) * 10**(_DW*j).
+		// The subtraction may overflow if q̂ estimate was off by one.
 		qhatv[n] = mulAdd10VWW(qhatv[0:n], v, qhat, 0)
 		qhl := len(qhatv)
 		if j+qhl > len(u) && qhatv[n] == 0 {
@@ -409,7 +412,11 @@ func (q dec) divBasic(u, v dec) {
 		c := sub10VV(u[j:j+qhl], u[j:], qhatv)
 		if c != 0 {
 			c := add10VV(u[j:j+n], u[j:], v)
-			u[j+n] += c
+			// If n == qhl, the carry from subVV and the carry from addVV
+			// cancel out and don't affect u[j+n].
+			if n < qhl {
+				u[j+n] += c
+			}
 			qhat--
 		}
 

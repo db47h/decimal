@@ -140,11 +140,11 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 	return
 }
 
-// pow5 sets z to 5**n and returns z.
+// pow2 sets z to 2**n and returns z.
 // n must not be negative.
 func (z *Decimal) pow2(n uint64) *Decimal {
-	const m = _DW * 100000 / 30103 // maximum exponent such that 2**m < _BD
-	if n <= m {
+	const m = _DWb - 1 // maximum exponent such that 2**m < _BD
+	if n < _W {
 		return z.SetUint64(1 << n)
 	}
 	// n > m
@@ -159,6 +159,9 @@ func (z *Decimal) pow2(n uint64) *Decimal {
 	for n > 0 {
 		if n&1 != 0 {
 			z.Mul(z, f)
+			if n == 1 {
+				break
+			}
 		}
 		f.Mul(f, f)
 		n >>= 1

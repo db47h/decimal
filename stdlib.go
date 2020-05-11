@@ -240,3 +240,34 @@ func (err ErrNaN) Error() string {
 }
 
 type nat []Word
+
+// Operands that are shorter than karatsubaThreshold are multiplied using
+// "grade school" multiplication; for longer operands the Karatsuba algorithm
+// is used.
+const karatsubaThreshold = 40 // computed by calibrate_test.go
+
+// karatsubaLen computes an approximation to the maximum k <= n such that
+// k = p/10**i for a number p <= threshold and an i >= 0. Thus, the
+// result is the largest number that can be divided repeatedly by 10 before
+// becoming about the value of threshold.
+func karatsubaLen(n, threshold int) int {
+	i := uint(0)
+	for n > threshold {
+		n >>= 1
+		i++
+	}
+	return n << i
+}
+
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+// Operands that are shorter than basicSqrThreshold are squared using
+// "grade school" multiplication; for operands longer than karatsubaSqrThreshold
+// we use the Karatsuba algorithm optimized for x == y.
+var basicSqrThreshold = 20      // computed by calibrate_test.go
+var karatsubaSqrThreshold = 260 // computed by calibrate_test.go

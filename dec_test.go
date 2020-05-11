@@ -621,7 +621,7 @@ func TestDecFibo(t *testing.T) {
 	}
 }
 
-func BenchmarkFibo(b *testing.B) {
+func BenchmarkDecFibo(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		decFibo(1e0)
 		decFibo(1e1)
@@ -830,7 +830,7 @@ func TestGoIssue37499(t *testing.T) {
 }
 
 // TODO(bd47h): move this to decimal_test
-func benchmarkDiv(b *testing.B, aSize, bSize int) {
+func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
 	aa := rndDec1(aSize)
 	bb := rndDec1(bSize)
 	if aa.cmp(bb) < 0 {
@@ -845,15 +845,17 @@ func benchmarkDiv(b *testing.B, aSize, bSize int) {
 	}
 }
 
-func BenchmarkDiv(b *testing.B) {
+func BenchmarkDecimalDiv(b *testing.B) {
 	sizes := []int{
 		10, 20, 50, 100, 200, 500, 1000,
-		1e4, 1e5, 1e6, 1e7,
+		1e4,
+		// TODO(db47h): enable these after optimizing
+		// 1e5, 1e6, 1e7,
 	}
 	for _, i := range sizes {
 		j := 2 * i
 		b.Run(fmt.Sprintf("%d/%d", j, i), func(b *testing.B) {
-			benchmarkDiv(b, j, i)
+			benchmarkDecimalDiv(b, j, i)
 		})
 	}
 }

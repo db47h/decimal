@@ -29,7 +29,7 @@ var intData = []struct {
 	{"0", 0, 0, nil, _DW, 0},
 }
 
-func TestDnorm(t *testing.T) {
+func TestDecimal_dnorm(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 	again:
 		w := uint(rand.Uint64()) % _DB
@@ -95,7 +95,7 @@ func TestDecimal_SetString(t *testing.T) {
 	}
 }
 
-func BenchmarkDnorm(b *testing.B) {
+func BenchmarkDecimal_dnorm(b *testing.B) {
 	d := dec(nil).make(1000)
 	for i := range d {
 		d[i] = Word(rand.Uint64()) % _DB

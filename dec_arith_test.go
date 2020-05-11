@@ -37,7 +37,7 @@ func rnd10V(n int) []Word {
 	return v
 }
 
-func TestDiv10W(t *testing.T) {
+func TestDecDiv10W(t *testing.T) {
 	h, l := rnd10W(), Word(rnd.Uint64())
 	for i := 0; i < 1e7; i++ {
 		q, r := div10W(h, l)
@@ -50,7 +50,7 @@ func TestDiv10W(t *testing.T) {
 
 var benchH, benchL Word
 
-func BenchmarkDiv10W_bits(b *testing.B) {
+func BenchmarkDecDiv10W_bits(b *testing.B) {
 	h, l := rnd10W(), Word(rnd.Uint64())
 	for i := 0; i < b.N; i++ {
 		h, l := bits.Div(uint(h), uint(l), _DB)
@@ -58,7 +58,7 @@ func BenchmarkDiv10W_bits(b *testing.B) {
 	}
 }
 
-func BenchmarkDiv10W_mul(b *testing.B) {
+func BenchmarkDecDiv10W_mul(b *testing.B) {
 	h, l := rnd10W(), Word(rnd.Uint64())
 	for i := 0; i < b.N; i++ {
 		benchH, benchL = div10W(h, l)
@@ -99,7 +99,7 @@ func testFun10VV(t *testing.T, msg string, f fun10VV, a arg10VV) {
 	}
 }
 
-func TestFun10VV(t *testing.T) {
+func TestDecFun10VV(t *testing.T) {
 	for _, a := range sum10VV {
 		arg := a
 		testFun10VV(t, "add10VV_g", add10VV_g, arg)
@@ -119,7 +119,7 @@ func TestFun10VV(t *testing.T) {
 	}
 }
 
-func BenchmarkAdd10VV(b *testing.B) {
+func BenchmarkDecAdd10VV(b *testing.B) {
 	for _, n := range benchSizes {
 		if isRaceBuilder && n > 1e3 {
 			continue
@@ -135,6 +135,8 @@ func BenchmarkAdd10VV(b *testing.B) {
 		})
 	}
 }
+
+// TODO(db47h): complete port of the tests
 
 // func BenchmarkSubVV(b *testing.B) {
 // 	for _, n := range benchSizes {
@@ -387,7 +389,7 @@ func BenchmarkAdd10VV(b *testing.B) {
 // 	}
 // }
 
-// // TODO(gri) mulAddVWW and divWVW are symmetric operations but
+// // TODO(db47h) mulAddVWW and divWVW are symmetric operations but
 // //           their signature is not symmetric. Try to unify.
 
 // type funWVW func(z []Word, xn Word, x []Word, y Word) (r Word)
@@ -448,7 +450,7 @@ func BenchmarkAdd10VV(b *testing.B) {
 // 	x, y, c Word
 // 	q, r    Word
 // }{
-// 	// TODO(agl): These will only work on 64-bit platforms.
+// 	// TODO(db47h): These will only work on 64-bit platforms.
 // 	// {15064310297182388543, 0xe7df04d2d35d5d80, 13537600649892366549, 13644450054494335067, 10832252001440893781},
 // 	// {15064310297182388543, 0xdab2f18048baa68d, 13644450054494335067, 12869334219691522700, 14233854684711418382},
 // 	{_M, _M, 0, _M - 1, 1},

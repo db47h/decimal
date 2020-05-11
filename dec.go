@@ -138,7 +138,7 @@ func (x dec) toNat(z []Word) []Word {
 func (z dec) setInt(x *big.Int) dec {
 	bb := x.Bits()
 	// TODO(db47h): here we cannot directly copy(b, bb)
-	// because big.Word != decimal.Word
+	// because big.Word != decimal.Word.
 	b := make([]Word, len(bb))
 	for i := 0; i < len(b) && i < len(bb); i++ {
 		b[i] = Word(bb[i])
@@ -507,8 +507,6 @@ func (z dec) shr(x dec, s uint) dec {
 // Operands that are shorter than basicSqrThreshold are squared using
 // "grade school" multiplication; for operands longer than karatsubaSqrThreshold
 // we use the Karatsuba algorithm optimized for x == y.
-var decBasicSqrThreshold = 20      // computed by calibrate_test.go
-var decKaratsubaSqrThreshold = 260 // computed by calibrate_test.go
 
 // z = x*x
 func (z dec) sqr(x dec) dec {
@@ -527,45 +525,102 @@ func (z dec) sqr(x dec) dec {
 		z = nil // z is an alias for x - cannot reuse
 	}
 
-	// if n < decBasicSqrThreshold {
-	z = z.make(2 * n)
-	decBasicMul(z, x, x)
-	return z.norm()
-	// }
-	// TODO(db47h): implement basicSqr
-	// if n < decKaratsubaSqrThreshold {
-	// 	z = z.make(2 * n)
-	// 	basicSqr(z, x)
-	// 	return z.norm()
-	// }
-	// TODO(db47h): implement karatsuba algorithm
+	if n < basicSqrThreshold {
+		z = z.make(2 * n)
+		decBasicMul(z, x, x)
+		return z.norm()
+	}
+	if n < karatsubaSqrThreshold {
+		z = z.make(2 * n)
+		decBasicSqr(z, x)
+		return z.norm()
+	}
 	// Use Karatsuba multiplication optimized for x == y.
 	// The algorithm and layout of z are the same as for mul.
 
 	// z = (x1*b + x0)^2 = x1^2*b^2 + 2*x1*x0*b + x0^2
 
-	// k := karatsubaLen(n, karatsubaSqrThreshold)
+	k := karatsubaLen(n, karatsubaSqrThreshold)
 
-	// x0 := x[0:k]
-	// z = z.make(max(6*k, 2*n))
-	// karatsubaSqr(z, x0) // z = x0^2
-	// z = z[0 : 2*n]
-	// z[2*k:].clear()
+	x0 := x[0:k]
+	z = z.make(max(6*k, 2*n))
+	decKaratsubaSqr(z, x0) // z = x0^2
+	z = z[0 : 2*n]
+	z[2*k:].clear()
 
-	// if k < n {
-	// 	tp := getNat(2 * k)
-	// 	t := *tp
-	// 	x0 := x0.norm()
-	// 	x1 := x[k:]
-	// 	t = t.mul(x0, x1)
-	// 	addAt(z, t, k)
-	// 	addAt(z, t, k) // z = 2*x1*x0*b + x0^2
-	// 	t = t.sqr(x1)
-	// 	addAt(z, t, 2*k) // z = x1^2*b^2 + 2*x1*x0*b + x0^2
-	// 	putNat(tp)
-	// }
+	if k < n {
+		tp := getDec(2 * k)
+		t := *tp
+		x0 := x0.norm()
+		x1 := x[k:]
+		t = t.mul(x0, x1)
+		decAddAt(z, t, k)
+		decAddAt(z, t, k) // z = 2*x1*x0*b + x0^2
+		t = t.sqr(x1)
+		decAddAt(z, t, 2*k) // z = x1^2*b^2 + 2*x1*x0*b + x0^2
+		putDec(tp)
+	}
 
-	// return z.norm()
+	return z.norm()
+}
+
+// basicSqr sets z = x*x and is asymptotically faster than basicMul
+// by about a factor of 2, but slower for small arguments due to overhead.
+// Requirements: len(x) > 0, len(z) == 2*len(x)
+// The (non-normalized) result is placed in z.
+func decBasicSqr(z, x dec) {
+	n := len(x)
+	tp := getDec(2 * n)
+	t := *tp // temporary variable to hold the products
+	t.clear()
+	z[1], z[0] = mul10WW_g(x[0], x[0]) // the initial square
+	for i := 1; i < n; i++ {
+		d := x[i]
+		// z collects the squares x[i] * x[i]
+		z[2*i+1], z[2*i] = mul10WW_g(d, d)
+		// t collects the products x[i] * x[j] where j < i
+		t[2*i] = addMul10VVW(t[i:2*i], x[0:i], d)
+	}
+	// t[2*n-1] = shlVU(t[1:2*n-1], t[1:2*n-1], 1) // double the j < i products
+	t[2*n-1] = mulAdd10VWW(t[1:2*n-1], t[1:2*n-1], 2, 0)
+	add10VV(z, z, t) // combine the result
+	putDec(tp)
+}
+
+// decKaratsubaSqr squares x and leaves the result in z.
+// len(x) must be a power of 2 and len(z) >= 6*len(x).
+// The (non-normalized) result is placed in z[0 : 2*len(x)].
+//
+// The algorithm and the layout of z are the same as for karatsuba.
+func decKaratsubaSqr(z, x dec) {
+	n := len(x)
+
+	if n&1 != 0 || n < karatsubaSqrThreshold || n < 2 {
+		decBasicSqr(z[:2*n], x)
+		return
+	}
+
+	n2 := n >> 1
+	x1, x0 := x[n2:], x[0:n2]
+
+	decKaratsubaSqr(z, x0)
+	decKaratsubaSqr(z[n:], x1)
+
+	// s = sign(xd*yd) == -1 for xd != 0; s == 1 for xd == 0
+	xd := z[2*n : 2*n+n2]
+	if sub10VV(xd, x1, x0) != 0 {
+		sub10VV(xd, x0, x1)
+	}
+
+	p := z[n*3:]
+	decKaratsubaSqr(p, xd)
+
+	r := z[n*4:]
+	copy(r, z[:n*2])
+
+	decKaratsubaAdd(z[n2:], r, n)
+	decKaratsubaAdd(z[n2:], r[n:], n)
+	decKaratsubaSub(z[n2:], p, n) // s == -1 for p != 0; s == 1 for p == 0
 }
 
 // decBasicMul multiplies x and y and leaves the result in z.
@@ -599,71 +654,71 @@ func (z dec) mul(x, y dec) dec {
 	}
 
 	// use basic multiplication if the numbers are small
-	// if n < karatsubaThreshold {
-	z = z.make(m + n)
-	decBasicMul(z, x, y)
-	return z.norm()
-	// }
+	if n < karatsubaThreshold {
+		z = z.make(m + n)
+		decBasicMul(z, x, y)
+		return z.norm()
+	}
 	// m >= n && n >= karatsubaThreshold && n >= 2
 
-	// // determine Karatsuba length k such that
-	// //
-	// //   x = xh*b + x0  (0 <= x0 < b)
-	// //   y = yh*b + y0  (0 <= y0 < b)
-	// //   b = 1<<(_W*k)  ("base" of digits xi, yi)
-	// //
-	// k := karatsubaLen(n, karatsubaThreshold)
-	// // k <= n
+	// determine Karatsuba length k such that
+	//
+	//   x = xh*b + x0  (0 <= x0 < b)
+	//   y = yh*b + y0  (0 <= y0 < b)
+	//   b = 10**(_DW*k)  ("base" of digits xi, yi)
+	//
+	k := karatsubaLen(n, karatsubaThreshold)
+	// k <= n
 
 	// // multiply x0 and y0 via Karatsuba
-	// x0 := x[0:k]              // x0 is not normalized
-	// y0 := y[0:k]              // y0 is not normalized
-	// z = z.make(max(6*k, m+n)) // enough space for karatsuba of x0*y0 and full result of x*y
-	// karatsuba(z, x0, y0)
-	// z = z[0 : m+n]  // z has final length but may be incomplete
-	// z[2*k:].clear() // upper portion of z is garbage (and 2*k <= m+n since k <= n <= m)
+	x0 := x[0:k]              // x0 is not normalized
+	y0 := y[0:k]              // y0 is not normalized
+	z = z.make(max(6*k, m+n)) // enough space for karatsuba of x0*y0 and full result of x*y
+	decKaratsuba(z, x0, y0)
+	z = z[0 : m+n]  // z has final length but may be incomplete
+	z[2*k:].clear() // upper portion of z is garbage (and 2*k <= m+n since k <= n <= m)
 
-	// // If xh != 0 or yh != 0, add the missing terms to z. For
-	// //
-	// //   xh = xi*b^i + ... + x2*b^2 + x1*b (0 <= xi < b)
-	// //   yh =                         y1*b (0 <= y1 < b)
-	// //
-	// // the missing terms are
-	// //
-	// //   x0*y1*b and xi*y0*b^i, xi*y1*b^(i+1) for i > 0
-	// //
-	// // since all the yi for i > 1 are 0 by choice of k: If any of them
-	// // were > 0, then yh >= b^2 and thus y >= b^2. Then k' = k*2 would
-	// // be a larger valid threshold contradicting the assumption about k.
-	// //
-	// if k < n || m != n {
-	// 	tp := getNat(3 * k)
-	// 	t := *tp
+	// If xh != 0 or yh != 0, add the missing terms to z. For
+	//
+	//   xh = xi*b^i + ... + x2*b^2 + x1*b (0 <= xi < b)
+	//   yh =                         y1*b (0 <= y1 < b)
+	//
+	// the missing terms are
+	//
+	//   x0*y1*b and xi*y0*b^i, xi*y1*b^(i+1) for i > 0
+	//
+	// since all the yi for i > 1 are 0 by choice of k: If any of them
+	// were > 0, then yh >= b^2 and thus y >= b^2. Then k' = k*2 would
+	// be a larger valid threshold contradicting the assumption about k.
+	//
+	if k < n || m != n {
+		tp := getDec(3 * k)
+		t := *tp
 
-	// 	// add x0*y1*b
-	// 	x0 := x0.norm()
-	// 	y1 := y[k:]       // y1 is normalized because y is
-	// 	t = t.mul(x0, y1) // update t so we don't lose t's underlying array
-	// 	addAt(z, t, k)
+		// add x0*y1*b
+		x0 := x0.norm()
+		y1 := y[k:]       // y1 is normalized because y is
+		t = t.mul(x0, y1) // update t so we don't lose t's underlying array
+		decAddAt(z, t, k)
 
-	// 	// add xi*y0<<i, xi*y1*b<<(i+k)
-	// 	y0 := y0.norm()
-	// 	for i := k; i < len(x); i += k {
-	// 		xi := x[i:]
-	// 		if len(xi) > k {
-	// 			xi = xi[:k]
-	// 		}
-	// 		xi = xi.norm()
-	// 		t = t.mul(xi, y0)
-	// 		addAt(z, t, i)
-	// 		t = t.mul(xi, y1)
-	// 		addAt(z, t, i+k)
-	// 	}
+		// add xi*y0<<i, xi*y1*b<<(i+k)
+		y0 := y0.norm()
+		for i := k; i < len(x); i += k {
+			xi := x[i:]
+			if len(xi) > k {
+				xi = xi[:k]
+			}
+			xi = xi.norm()
+			t = t.mul(xi, y0)
+			decAddAt(z, t, i)
+			t = t.mul(xi, y1)
+			decAddAt(z, t, i+k)
+		}
 
-	// 	putNat(tp)
-	// }
+		putDec(tp)
+	}
 
-	// return z.norm()
+	return z.norm()
 }
 
 // If m != 0 (i.e., len(m) != 0), expNN sets z to x**y mod m;
@@ -786,6 +841,8 @@ func (z dec) expNN(x, y, m dec) dec {
 // - len(z) >= len(u)-len(v)
 //
 // See Burnikel, Ziegler, "Fast Recursive Division", Algorithm 1 and 2.
+// TODO(db47h): review https://pure.mpg.de/rest/items/item_1819444_4/component/file_2599480/content
+// and make sure that when calling divBasic, the preconditions are met.
 func (z dec) divRecursive(u, v dec) {
 	// Recursion depth is less than 2 log2(len(v))
 	// Allocate a slice of temporaries to be reused across recursion.
@@ -942,5 +999,119 @@ func decAddAt(z, x dec, i int) {
 				add10VW(z[j:], z[j:], c)
 			}
 		}
+	}
+}
+
+// Fast version of z[0:n+n>>1].add(z[0:n+n>>1], x[0:n]) w/o bounds checks.
+// Factored out for readability - do not use outside karatsuba.
+func decKaratsubaAdd(z, x dec, n int) {
+	if c := add10VV(z[0:n], z, x); c != 0 {
+		add10VW(z[n:n+n>>1], z[n:], c)
+	}
+}
+
+// Like karatsubaAdd, but does subtract.
+func decKaratsubaSub(z, x dec, n int) {
+	if c := sub10VV(z[0:n], z, x); c != 0 {
+		sub10VW(z[n:n+n>>1], z[n:], c)
+	}
+}
+
+// karatsuba multiplies x and y and leaves the result in z.
+// Both x and y must have the same length n and n must be a
+// power of 2. The result vector z must have len(z) >= 6*n.
+// The (non-normalized) result is placed in z[0 : 2*n].
+func decKaratsuba(z, x, y dec) {
+	n := len(y)
+
+	// Switch to basic multiplication if numbers are odd or small.
+	// (n is always even if karatsubaThreshold is even, but be
+	// conservative)
+	if n&1 != 0 || n < karatsubaThreshold || n < 2 {
+		decBasicMul(z, x, y)
+		return
+	}
+	// n&1 == 0 && n >= karatsubaThreshold && n >= 2
+
+	// Karatsuba multiplication is based on the observation that
+	// for two numbers x and y with:
+	//
+	//   x = x1*b + x0
+	//   y = y1*b + y0
+	//
+	// the product x*y can be obtained with 3 products z2, z1, z0
+	// instead of 4:
+	//
+	//   x*y = x1*y1*b*b + (x1*y0 + x0*y1)*b + x0*y0
+	//       =    z2*b*b +              z1*b +    z0
+	//
+	// with:
+	//
+	//   xd = x1 - x0
+	//   yd = y0 - y1
+	//
+	//   z1 =      xd*yd                    + z2 + z0
+	//      = (x1-x0)*(y0 - y1)             + z2 + z0
+	//      = x1*y0 - x1*y1 - x0*y0 + x0*y1 + z2 + z0
+	//      = x1*y0 -    z2 -    z0 + x0*y1 + z2 + z0
+	//      = x1*y0                 + x0*y1
+
+	// split x, y into "digits"
+	n2 := n >> 1              // n2 >= 1
+	x1, x0 := x[n2:], x[0:n2] // x = x1*b + y0
+	y1, y0 := y[n2:], y[0:n2] // y = y1*b + y0
+
+	// z is used for the result and temporary storage:
+	//
+	//   6*n     5*n     4*n     3*n     2*n     1*n     0*n
+	// z = [z2 copy|z0 copy| xd*yd | yd:xd | x1*y1 | x0*y0 ]
+	//
+	// For each recursive call of karatsuba, an unused slice of
+	// z is passed in that has (at least) half the length of the
+	// caller's z.
+
+	// compute z0 and z2 with the result "in place" in z
+	decKaratsuba(z, x0, y0)     // z0 = x0*y0
+	decKaratsuba(z[n:], x1, y1) // z2 = x1*y1
+
+	// compute xd (or the negative value if underflow occurs)
+	s := 1 // sign of product xd*yd
+	xd := z[2*n : 2*n+n2]
+	if sub10VV(xd, x1, x0) != 0 { // x1-x0
+		s = -s
+		sub10VV(xd, x0, x1) // x0-x1
+	}
+
+	// compute yd (or the negative value if underflow occurs)
+	yd := z[2*n+n2 : 3*n]
+	if sub10VV(yd, y0, y1) != 0 { // y0-y1
+		s = -s
+		sub10VV(yd, y1, y0) // y1-y0
+	}
+
+	// p = (x1-x0)*(y0-y1) == x1*y0 - x1*y1 - x0*y0 + x0*y1 for s > 0
+	// p = (x0-x1)*(y0-y1) == x0*y0 - x0*y1 - x1*y0 + x1*y1 for s < 0
+	p := z[n*3:]
+	decKaratsuba(p, xd, yd)
+
+	// save original z2:z0
+	// (ok to use upper half of z since we're done recursing)
+	r := z[n*4:]
+	copy(r, z[:n*2])
+
+	// add up all partial products
+	//
+	//   2*n     n     0
+	// z = [ z2  | z0  ]
+	//   +    [ z0  ]
+	//   +    [ z2  ]
+	//   +    [  p  ]
+	//
+	decKaratsubaAdd(z[n2:], r, n)
+	decKaratsubaAdd(z[n2:], r[n:], n)
+	if s > 0 {
+		decKaratsubaAdd(z[n2:], p, n)
+	} else {
+		decKaratsubaSub(z[n2:], p, n)
 	}
 }

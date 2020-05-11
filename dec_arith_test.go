@@ -86,7 +86,7 @@ var sum10VV = []arg10VV{
 }
 
 func testFun10VV(t *testing.T, msg string, f fun10VV, a arg10VV) {
-	z := make(nat, len(a.z))
+	z := make(dec, len(a.z))
 	c := f(z, a.x, a.y)
 	for i, zi := range z {
 		if zi != a.z[i] {

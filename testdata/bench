@@ -1,0 +1,12 @@
+#!/bin/bash
+
+TEST="$1"
+shift
+
+go test -v -run ^$ -bench "$TEST" -cpu 1 -count 5 -tags decimal_pure_go "$@" | tee bench-go
+go test -v -run ^$ -bench "$TEST" -cpu 1 -count 5 "$@" | tee bench-asm
+
+benchstat bench-go bench-asm
+
+rm bench-go
+rm bench-asm

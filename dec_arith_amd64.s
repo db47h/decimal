@@ -20,15 +20,15 @@ TEXT ·mul10WW(SB),NOSPLIT,$0
 	MOVQ AX, y+8(FP)
 	JMP div10WInternal(SB)
 
-// func div10WW(u1, u0, v Word) (q, r Word)
+// func div10WW(x1, x0, y Word) (q, r Word)
 TEXT ·div10WW(SB),NOSPLIT,$0
-	// mulAddWWW(u1, _DB, u0)
-	MOVQ u1+0(FP), AX
+	// mulAddWWW(x1, _DB, x0)
+	MOVQ x1+0(FP), AX
 	MOVQ $_DB, CX
 	MULQ CX            // hi: DX, lo: AX
-	ADDQ u0+8(FP), AX  // AX += v
+	ADDQ x0+8(FP), AX  // AX += v
 	ADCQ $0, DX        // DX += carry
-	DIVQ v+16(FP)
+	DIVQ y+16(FP)
 	MOVQ AX, q+24(FP)
 	MOVQ DX, r+32(FP)
 	RET
@@ -101,66 +101,172 @@ TEXT div10WInternal(SB),NOSPLIT,$0
 
 // func add10VV(z, x, y []Word) (c Word)
 TEXT ·add10VV(SB),NOSPLIT,$0
-	MOVQ	z+0(FP), R10
-	MOVQ	x+24(FP), R8
-	MOVQ	y+48(FP), R9
+	MOVQ z_len+8(FP), DI
+	MOVQ x+24(FP), R8
+	MOVQ y+48(FP), R9
+	MOVQ z+0(FP), R10
 
-	MOVQ	z_len+8(FP), DI
-	XORL	CX, CX
-	TESTQ	DI, DI
-	JLE 	EL
-	XORL	SI, SI
-	MOVQ    $_DB, R11
-LOOP:
-	NEGB	CL // set CF if CX == 0
-	MOVQ	(R8)(SI*8), DX
-	MOVQ	(R9)(SI*8), AX
-	ADCQ	AX, DX
-	SETCS	CL
-	CMPQ	DX, R11
-	SETCC	BL
-	ORB		BL, CL	// carry from x+y | s <  
-	MOVBLZX	CL, BX
-	MOVQ	R11, AX
-	NEGQ	BX
-	ANDQ	BX, AX
-	SUBQ	AX, DX
-	MOVQ	DX, (R10)(SI*8)
-	INCQ	SI		// i++
-	DECQ	DI		// n--
-	JNE 	LOOP
-EL:
-	MOVQ	CX, c+72(FP)
+	MOVQ $0, CX		// c = 0
+	MOVQ $0, SI		// i = 0
+	MOVQ $_DMax, DX
+
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V1			// if n < 0 goto V1
+
+U1:	// n >= 0
+	// regular loop body unrolled 4x
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	ADDQ CX, CX			// restore CF
+	ADCQ 0(R9)(SI*8), R11
+	SBBQ CX, CX
+	CMPQ DX, R11
+	SBBQ BX, BX
+	ORQ BX, CX
+	LEAQ 1(DX), AX
+	MOVQ CX, BX
+	ANDQ BX, AX
+	SUBQ AX, R11
+	ADDQ CX, CX			// restore CF
+	ADCQ 8(R9)(SI*8), R12
+	SBBQ CX, CX
+	CMPQ DX, R12
+	SBBQ BX, BX
+	ORQ BX, CX
+	LEAQ 1(DX), AX
+	MOVQ CX, BX
+	ANDQ BX, AX
+	SUBQ AX, R12
+	ADDQ CX, CX			// restore CF
+	ADCQ 16(R9)(SI*8), R13
+	SBBQ CX, CX
+	CMPQ DX, R13
+	SBBQ BX, BX
+	ORQ BX, CX
+	LEAQ 1(DX), AX
+	MOVQ CX, BX
+	ANDQ BX, AX
+	SUBQ AX, R13
+	ADDQ CX, CX			// restore CF
+	ADCQ 24(R9)(SI*8), R14
+	SBBQ CX, CX
+	CMPQ DX, R14
+	SBBQ BX, BX
+	ORQ BX, CX
+	LEAQ 1(DX), AX
+	MOVQ CX, BX
+	ANDQ BX, AX
+	SUBQ AX, R14
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U1			// if n >= 0 goto U1
+
+V1:	ADDQ $4, DI		// n += 4
+	JLE E1			// if n <= 0 goto E1
+
+L1:	// n > 0
+	ADDQ CX, CX		// restore CF
+	MOVQ 0(R8)(SI*8), R11
+	ADCQ 0(R9)(SI*8), R11
+	SBBQ CX, CX
+	CMPQ DX, R11
+	SBBQ BX, BX
+	ORQ BX, CX
+	LEAQ 1(DX), AX
+	MOVQ CX, BX
+	ANDQ BX, AX
+	SUBQ AX, R11
+	MOVQ R11, 0(R10)(SI*8)
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L1			// if n > 0 goto L1
+
+E1: NEGQ CX
+	MOVQ CX, c+72(FP)	// return c
 	RET
 
 // func add10VV(z, x, y []Word) (c Word)
 TEXT ·sub10VV(SB),NOSPLIT,$0
-	MOVQ	z+0(FP), R10
-	MOVQ	x+24(FP), R8
-	MOVQ	y+48(FP), R9
+	MOVQ z_len+8(FP), DI
+	MOVQ x+24(FP), R8
+	MOVQ y+48(FP), R9
+	MOVQ z+0(FP), R10
 
-	MOVQ	z_len+8(FP), DI
-	XORL	CX, CX
-	TESTQ	DI, DI
-	JLE 	EL
-	XORL	SI, SI
-	MOVQ    $_DB, R11
-LOOP:
-	ADDQ	CX, CX
-	MOVQ	(R8)(SI*8), DX
-	MOVQ	(R9)(SI*8), AX
-	SBBQ	AX, DX
-	SBBQ	CX, CX
-	MOVQ	R11, AX
-	ANDQ	CX, AX
-	ADDQ	AX, DX
-	MOVQ	DX, (R10)(SI*8)
-	INCQ	SI		// i++
-	DECQ	DI		// n--
-	JNE 	LOOP
-	NEGQ	CX
-EL:
-	MOVQ	CX, c+72(FP)
+	MOVQ $0, CX		// c = 0
+	MOVQ $0, SI		// i = 0
+	MOVQ $_DB, DX
+
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V2			// if n < 0 goto V2
+
+U2:	// n >= 0
+	// regular loop body unrolled 4x
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	ADDQ CX, CX		// restore CF	
+	SBBQ 0(R9)(SI*8), R11
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R11
+	ADDQ CX, CX		// restore CF
+	SBBQ 8(R9)(SI*8), R12
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R12
+	ADDQ CX, CX		// restore CF
+	SBBQ 16(R9)(SI*8), R13
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R13
+	ADDQ CX, CX		// restore CF
+	SBBQ 24(R9)(SI*8), R14
+	SBBQ CX, CX		// save CF
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R14
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U2			// if n >= 0 goto U2
+
+V2:	ADDQ $4, DI		// n += 4
+	JLE E2			// if n <= 0 goto E2
+
+L2:	// n > 0
+	ADDQ CX, CX		// restore CF
+	MOVQ 0(R8)(SI*8), R11
+	SBBQ 0(R9)(SI*8), R11
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R11
+	MOVQ R11, 0(R10)(SI*8)
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L2			// if n > 0 goto L2
+
+E2:	NEGQ CX
+	MOVQ CX, c+72(FP)	// return c
 	RET
 
 // // func addVW(z, x []Word, y Word) (c Word)

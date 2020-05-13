@@ -38,8 +38,8 @@ func rnd10V(n int) []Word {
 }
 
 func TestDecDiv10W(t *testing.T) {
-	h, l := rnd10W(), Word(rnd.Uint64())
 	for i := 0; i < 1e7; i++ {
+		h, l := rnd10W(), Word(rnd.Uint64())
 		q, r := div10W(h, l)
 		qq, rr := bits.Div(uint(h), uint(l), _DB)
 		if q != Word(qq) || r != Word(rr) {
@@ -90,12 +90,12 @@ func testFun10VV(t *testing.T, msg string, f fun10VV, a arg10VV) {
 	c := f(z, a.x, a.y)
 	for i, zi := range z {
 		if zi != a.z[i] {
-			t.Errorf("%s%+v\n\tgot z[%d] = %#x; want %#x", msg, a, i, zi, a.z[i])
+			t.Errorf("%s%+v\n\tgot z[%d] = %d; want %d", msg, a, i, zi, a.z[i])
 			break
 		}
 	}
 	if c != a.c {
-		t.Errorf("%s%+v\n\tgot c = %#x; want %#x", msg, a, c, a.c)
+		t.Errorf("%s%+v\n\tgot c = %d; want %d", msg, a, c, a.c)
 	}
 }
 
@@ -124,36 +124,36 @@ func BenchmarkDecAdd10VV(b *testing.B) {
 		if isRaceBuilder && n > 1e3 {
 			continue
 		}
-		x := rndV(n)
-		y := rndV(n)
+		x := rnd10V(n)
+		y := rnd10V(n)
 		z := make([]Word, n)
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
 			b.SetBytes(int64(n * _W))
 			for i := 0; i < b.N; i++ {
-				addVV(z, x, y)
+				add10VV(z, x, y)
+			}
+		})
+	}
+}
+
+func BenchmarkDecSub10VV(b *testing.B) {
+	for _, n := range benchSizes {
+		if isRaceBuilder && n > 1e3 {
+			continue
+		}
+		x := rnd10V(n)
+		y := rnd10V(n)
+		z := make([]Word, n)
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			b.SetBytes(int64(n * _W))
+			for i := 0; i < b.N; i++ {
+				sub10VV(z, x, y)
 			}
 		})
 	}
 }
 
 // TODO(db47h): complete port of the tests
-
-// func BenchmarkSubVV(b *testing.B) {
-// 	for _, n := range benchSizes {
-// 		if isRaceBuilder && n > 1e3 {
-// 			continue
-// 		}
-// 		x := rndV(n)
-// 		y := rndV(n)
-// 		z := make([]Word, n)
-// 		b.Run(fmt.Sprint(n), func(b *testing.B) {
-// 			b.SetBytes(int64(n * _W))
-// 			for i := 0; i < b.N; i++ {
-// 				subVV(z, x, y)
-// 			}
-// 		})
-// 	}
-// }
 
 // type funVW func(z, x []Word, y Word) (c Word)
 // type argVW struct {

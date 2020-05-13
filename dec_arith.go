@@ -148,10 +148,17 @@ func div10WW_g(u1, u0, v Word) (q, r Word) {
 
 func add10WWW_g(x, y, cIn Word) (s, c Word) {
 	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
-	if cc != 0 || r >= _DB {
-		cc = 1
-		r -= _DB
+	// if cc != 0 || r > _DB-1 {
+	// 	cc = 1
+	// 	r -= _DB
+	// }
+	// c1 := uint(int(r-_DB) >> 63)
+	var c1 uint
+	if r >= _DB {
+		c1 = 1
 	}
+	cc |= c1
+	r -= _DB & -cc
 	return Word(r), Word(cc)
 }
 

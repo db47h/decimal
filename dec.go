@@ -383,10 +383,10 @@ func (q dec) divBasic(u, v dec) {
 		}
 		if ujn != vn1 {
 			var rhat Word
-			qhat, rhat = div10WW_g(ujn, u[j+n-1], vn1)
+			qhat, rhat = div10WW(ujn, u[j+n-1], vn1)
 			// x1 | x2 = q̂v_{n-2}
 			vn2 := v[n-2]
-			x1, x2 := mul10WW_g(qhat, vn2)
+			x1, x2 := mul10WW(qhat, vn2)
 			// test if q̂v_{n-2} > br̂ + u_{j+n-2}
 			ujn2 := u[j+n-2]
 			for greaterThan(x1, x2, rhat, ujn2) {
@@ -397,7 +397,7 @@ func (q dec) divBasic(u, v dec) {
 				if rhat < prevRhat {
 					break
 				}
-				x1, x2 = mul10WW_g(qhat, vn2)
+				x1, x2 = mul10WW(qhat, vn2)
 			}
 		}
 
@@ -437,7 +437,7 @@ func greaterThan(x1, x2, y1, y2 Word) bool {
 // modW returns x % d.
 func (x dec) modW(d Word) (r Word) {
 	for i := len(x) - 1; i >= 0; i-- {
-		_, r = div10WW_g(r, x[i], d)
+		_, r = div10WW(r, x[i], d)
 	}
 	return r
 }
@@ -517,7 +517,7 @@ func (z dec) sqr(x dec) dec {
 	case n == 1:
 		d := x[0]
 		z = z.make(2)
-		z[1], z[0] = mul10WW_g(d, d)
+		z[1], z[0] = mul10WW(d, d)
 		return z.norm()
 	}
 
@@ -573,11 +573,11 @@ func decBasicSqr(z, x dec) {
 	tp := getDec(2 * n)
 	t := *tp // temporary variable to hold the products
 	t.clear()
-	z[1], z[0] = mul10WW_g(x[0], x[0]) // the initial square
+	z[1], z[0] = mul10WW(x[0], x[0]) // the initial square
 	for i := 1; i < n; i++ {
 		d := x[i]
 		// z collects the squares x[i] * x[i]
-		z[2*i+1], z[2*i] = mul10WW_g(d, d)
+		z[2*i+1], z[2*i] = mul10WW(d, d)
 		// t collects the products x[i] * x[j] where j < i
 		t[2*i] = addMul10VVW(t[i:2*i], x[0:i], d)
 	}

@@ -5,13 +5,17 @@
 package decimal
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"testing"
 )
 
-// TODO(db47h): set this to false
-var isRaceBuilder = true
+var isRaceBuilder bool
+
+func init() {
+	flag.BoolVar(&isRaceBuilder, "rb", true, "race builder")
+}
 
 type funVV func(z, x, y []Word) (c Word)
 type argVV struct {

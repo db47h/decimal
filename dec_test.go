@@ -859,3 +859,15 @@ func BenchmarkDecimalDiv(b *testing.B) {
 		})
 	}
 }
+
+// func TestMPRIME(t *testing.T) {
+// 	const (
+// 		N     = _W
+// 		d     = _DB
+// 		l     = _DWb
+// 		mP    = (1<<(N+l)-1)/d - 1<<N // m'
+// 		dNorm = d << (N - l)
+// 	)
+// 	m := uint64(mP)
+// 	t.Logf("%d %#x", uint64(m), uint64(m))
+// }

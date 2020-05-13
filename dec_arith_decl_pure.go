@@ -1,4 +1,14 @@
+// +build decimal_pure_go !amd64
+
 package decimal
+
+func mul10WW(x, y Word) (z1, z0 Word) {
+	return mul10WW_g(x, y)
+}
+
+func div10WW(x1, x0, y Word) (q, r Word) {
+	return div10WW_g(x1, x0, y)
+}
 
 func add10VV(z, x, y []Word) (c Word) {
 	return add10VV_g(z, x, y)

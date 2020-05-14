@@ -64,7 +64,7 @@ func (x dec) digit(i uint) uint {
 		return 0
 	}
 	// 0 <= j < len(x)
-	return (uint(x[j]) / pow10(i)) % 10
+	return uint(x[j]/pow10(i)) % 10
 }
 
 func (z dec) make(n int) dec {
@@ -166,7 +166,7 @@ func (x dec) sticky(i uint) uint {
 			return 1
 		}
 	}
-	if uint(x[j])%pow10(i) != 0 {
+	if x[j]%pow10(i) != 0 {
 		return 1
 	}
 	return 0

@@ -25,7 +25,7 @@ var pow10s = [...]uint64{
 	10000000000000000, 100000000000000000, 1000000000000000000, 10000000000000000000,
 }
 
-func pow10(n uint) uint { return uint(pow10s[n]) }
+func pow10(n uint) Word { return Word(pow10s[n]) }
 
 var maxDigits = [...]uint{
 	1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5,
@@ -54,7 +54,7 @@ func decDigits64(x uint64) (n uint) {
 
 func decDigits32(x uint) (n uint) {
 	n = maxDigits[bits.Len(x)]
-	if x < pow10(n-1) {
+	if x < uint(pow10(n-1)) {
 		n--
 	}
 	return n
@@ -148,12 +148,9 @@ func div10WW_g(u1, u0, v Word) (q, r Word) {
 
 func add10WWW_g(x, y, cIn Word) (s, c Word) {
 	r, cc := bits.Add(uint(x), uint(y), uint(cIn))
-	// if cc != 0 || r > _DB-1 {
-	// 	cc = 1
-	// 	r -= _DB
-	// }
-	// c1 := uint(int(r-_DB) >> 63)
 	var c1 uint
+	// this simple if statement is compiled without jumps
+	// at least on amd64.
 	if r >= _DB {
 		c1 = 1
 	}
@@ -187,7 +184,10 @@ func sub10VV_g(z, x, y []Word) (c Word) {
 }
 
 // add10VW adds y to x. The resulting carry c is either 0 or 1.
-func add10VW_g(z, x dec, y Word) (c Word) {
+func add10VW_g(z, x []Word, y Word) (c Word) {
+	if len(z) == 0 {
+		return y
+	}
 	z[0], c = add10WWW_g(x[0], y, 0)
 	// propagate carry
 	for i := 1; i < len(z) && i < len(x); i++ {
@@ -219,7 +219,7 @@ func sub10VW_g(z, x []Word, y Word) (c Word) {
 }
 
 // shl10VU sets z to x*(10**s), s < _WD
-func shl10VU_g(z, x dec, s uint) (r Word) {
+func shl10VU_g(z, x []Word, s uint) (r Word) {
 	if s == 0 {
 		copy(z, x)
 		return
@@ -227,7 +227,7 @@ func shl10VU_g(z, x dec, s uint) (r Word) {
 	if len(z) == 0 || len(x) == 0 {
 		return
 	}
-	d, m := Word(pow10(_DW-s)), Word(pow10(s))
+	d, m := pow10(_DW-s), pow10(s)
 	var h, l Word
 	r, l = divWW(0, x[len(x)-1], d)
 	for i := len(z) - 1; i > 0; i-- {
@@ -241,7 +241,7 @@ func shl10VU_g(z, x dec, s uint) (r Word) {
 }
 
 // shr10VU sets z to x/(10**s)
-func shr10VU_g(z, x dec, s uint) (r Word) {
+func shr10VU_g(z, x []Word, s uint) (r Word) {
 	if s == 0 {
 		copy(z, x)
 		return
@@ -251,7 +251,7 @@ func shr10VU_g(z, x dec, s uint) (r Word) {
 	}
 
 	var h, l Word
-	d, m := Word(pow10(s)), Word(pow10(_DW-s))
+	d, m := pow10(s), pow10(_DW-s)
 	h, r = divWW(0, x[0], Word(d))
 	for i := 1; i < len(z) && i < len(x); i++ {
 		t := h
@@ -259,7 +259,7 @@ func shr10VU_g(z, x dec, s uint) (r Word) {
 		z[i-1] = t + l*m
 	}
 	z[len(z)-1] = h
-	return r
+	return r * m
 }
 
 func mulAdd10VWW_g(z, x []Word, y, r Word) (c Word) {

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+TEST="$1"
+shift
+
+if [ ! -e "bench-go" ]; then
+    go test -v -run ^$ -bench "$TEST" -cpu 1 -count 5 -tags decimal_pure_go "$@" | tee bench-go
+fi
+go test -v -run ^$ -bench "$TEST" -cpu 1 -count 5 "$@" | tee bench-asm
+
+benchstat bench-go bench-asm
+
+# rm bench-go
+# rm bench-asm

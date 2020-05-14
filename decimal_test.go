@@ -34,7 +34,7 @@ func TestDecimal_dnorm(t *testing.T) {
 	again:
 		w := uint(rand.Uint64()) % _DB
 		e := uint(rand.Intn(_DW + 1))
-		h, l := mulWW(Word(w), Word(pow10(e)))
+		h, l := mulWW(Word(w), pow10(e))
 		// convert h, l from base _B (2**64) to base _BD (10**19) or 2**32 -> 10**9
 		h, l = div10W(h, l)
 		d := dec{Word(l), Word(h)}.norm()
@@ -47,7 +47,7 @@ func TestDecimal_dnorm(t *testing.T) {
 		dd := dec(nil).set(d)
 		s := dnorm(dd)
 		// d should now have a single element with e shifted left
-		ew := w * pow10(_DW-decDigits(w))
+		ew := w * uint(pow10(_DW-decDigits(w)))
 		es := int64(uint(len(d)*_DW) - (decDigits(w) + e))
 		if dd[len(dd)-1] != Word(ew) || s != es {
 			t.Fatalf("%ve%v => dnorm(%v) = %v, %v --- Expected %d, %d",

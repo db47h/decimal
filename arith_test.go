@@ -14,7 +14,7 @@ import (
 var isRaceBuilder bool
 
 func init() {
-	flag.BoolVar(&isRaceBuilder, "rb", true, "race builder")
+	flag.BoolVar(&isRaceBuilder, "rb", false, "race builder")
 }
 
 type funVV func(z, x, y []Word) (c Word)

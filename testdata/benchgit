@@ -20,23 +20,24 @@ function doBench {
     shift
     local REV="$1"
     shift
-    echo $TEST - $REV
     go test -v -run ^$ -bench "$TEST" -cpu 1 -count 5 "$@" | tee bench-"$REV"
 }
 
-if [ "$REV" == "master" ]; then
-    # compare current against master
-    git stash
-    doBench "$TEST" "$REV" "$@"
-    git stash pop
-else
-    git checkout "$REV" 
-    doBench "$TEST" "$REV" "$@"
-    git checkout master
+if [ ! -e "bench-$REV" ]; then
+    if [ "$REV" == "master" ]; then
+        # compare current against master
+        git stash
+        doBench "$TEST" "$REV" "$@"
+        git stash pop
+    else
+        git checkout "$REV" 
+        doBench "$TEST" "$REV" "$@"
+        git checkout master
+    fi
 fi
 
 doBench "$TEST" "current" "$@"
 
 benchstat bench-"$REV" bench-current
 
-rm bench-"$REV" bench-current
+# rm bench-"$REV" bench-current

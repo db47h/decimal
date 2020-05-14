@@ -13,15 +13,11 @@ func div10W(n1, n0 Word) (q, r Word)
 
 func sub10VV(z, x, y []Word) (c Word)
 
+func add10VW(z, x []Word, y Word) (c Word)
+
+func sub10VW(z, x []Word, y Word) (c Word)
+
 // Not implemented yet
-
-func add10VW(z, x []Word, y Word) (c Word) {
-	return add10VW_g(z, x, y)
-}
-
-func sub10VW(z, x []Word, y Word) (c Word) {
-	return sub10VW_g(z, x, y)
-}
 
 func shl10VU(z, x []Word, s uint) (c Word) {
 	return shl10VU_g(z, x, s)

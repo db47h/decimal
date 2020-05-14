@@ -127,8 +127,7 @@ U1:	// n >= 0
 	SBBQ BX, BX
 	ORQ BX, CX
 	LEAQ 1(DX), AX
-	MOVQ CX, BX
-	ANDQ BX, AX
+	ANDQ CX, AX
 	SUBQ AX, R11
 	ADDQ CX, CX			// restore CF
 	ADCQ 8(R9)(SI*8), R12
@@ -137,8 +136,7 @@ U1:	// n >= 0
 	SBBQ BX, BX
 	ORQ BX, CX
 	LEAQ 1(DX), AX
-	MOVQ CX, BX
-	ANDQ BX, AX
+	ANDQ CX, AX
 	SUBQ AX, R12
 	ADDQ CX, CX			// restore CF
 	ADCQ 16(R9)(SI*8), R13
@@ -147,8 +145,7 @@ U1:	// n >= 0
 	SBBQ BX, BX
 	ORQ BX, CX
 	LEAQ 1(DX), AX
-	MOVQ CX, BX
-	ANDQ BX, AX
+	ANDQ CX, AX
 	SUBQ AX, R13
 	ADDQ CX, CX			// restore CF
 	ADCQ 24(R9)(SI*8), R14
@@ -157,8 +154,7 @@ U1:	// n >= 0
 	SBBQ BX, BX
 	ORQ BX, CX
 	LEAQ 1(DX), AX
-	MOVQ CX, BX
-	ANDQ BX, AX
+	ANDQ CX, AX
 	SUBQ AX, R14
 	MOVQ R11, 0(R10)(SI*8)
 	MOVQ R12, 8(R10)(SI*8)
@@ -181,20 +177,19 @@ L1:	// n > 0
 	SBBQ BX, BX
 	ORQ BX, CX
 	LEAQ 1(DX), AX
-	MOVQ CX, BX
-	ANDQ BX, AX
+	ANDQ CX, AX
 	SUBQ AX, R11
 	MOVQ R11, 0(R10)(SI*8)
 
-	ADDQ $1, SI		// i++
-	SUBQ $1, DI		// n--
+	INCQ SI			// i++
+	DECQ DI			// n--
 	JG L1			// if n > 0 goto L1
 
 E1: NEGQ CX
 	MOVQ CX, c+72(FP)	// return c
 	RET
 
-// func add10VV(z, x, y []Word) (c Word)
+// func sub10VV(z, x, y []Word) (c Word)
 TEXT ·sub10VV(SB),NOSPLIT,$0
 	MOVQ z_len+8(FP), DI
 	MOVQ x+24(FP), R8
@@ -261,126 +256,244 @@ L2:	// n > 0
 	ADDQ AX, R11
 	MOVQ R11, 0(R10)(SI*8)
 
-	ADDQ $1, SI		// i++
-	SUBQ $1, DI		// n--
+	INCQ SI			// i++
+	DECQ DI			// n--
 	JG L2			// if n > 0 goto L2
 
 E2:	NEGQ CX
 	MOVQ CX, c+72(FP)	// return c
 	RET
 
-// // func addVW(z, x []Word, y Word) (c Word)
-// TEXT ·addVW(SB),NOSPLIT,$0
-// 	MOVQ z_len+8(FP), DI
-// 	CMPQ DI, $32
-// 	JG large
-// 	MOVQ x+24(FP), R8
-// 	MOVQ y+48(FP), CX	// c = y
-// 	MOVQ z+0(FP), R10
-// 
-// 	MOVQ $0, SI		// i = 0
-// 
-// 	// s/JL/JMP/ below to disable the unrolled loop
-// 	SUBQ $4, DI		// n -= 4
-// 	JL V3			// if n < 4 goto V3
-// 
-// U3:	// n >= 0
-// 	// regular loop body unrolled 4x
-// 	MOVQ 0(R8)(SI*8), R11
-// 	MOVQ 8(R8)(SI*8), R12
-// 	MOVQ 16(R8)(SI*8), R13
-// 	MOVQ 24(R8)(SI*8), R14
-// 	ADDQ CX, R11
-// 	ADCQ $0, R12
-// 	ADCQ $0, R13
-// 	ADCQ $0, R14
-// 	SBBQ CX, CX		// save CF
-// 	NEGQ CX
-// 	MOVQ R11, 0(R10)(SI*8)
-// 	MOVQ R12, 8(R10)(SI*8)
-// 	MOVQ R13, 16(R10)(SI*8)
-// 	MOVQ R14, 24(R10)(SI*8)
-// 
-// 	ADDQ $4, SI		// i += 4
-// 	SUBQ $4, DI		// n -= 4
-// 	JGE U3			// if n >= 0 goto U3
-// 
-// V3:	ADDQ $4, DI		// n += 4
-// 	JLE E3			// if n <= 0 goto E3
-// 
-// L3:	// n > 0
-// 	ADDQ 0(R8)(SI*8), CX
-// 	MOVQ CX, 0(R10)(SI*8)
-// 	SBBQ CX, CX		// save CF
-// 	NEGQ CX
-// 
-// 	ADDQ $1, SI		// i++
-// 	SUBQ $1, DI		// n--
-// 	JG L3			// if n > 0 goto L3
-// 
-// E3:	MOVQ CX, c+56(FP)	// return c
-// 	RET
-// large:
-// 	JMP ·addVWlarge(SB)
-// 
-// 
-// // func subVW(z, x []Word, y Word) (c Word)
-// // (same as addVW except for SUBQ/SBBQ instead of ADDQ/ADCQ and label names)
-// TEXT ·subVW(SB),NOSPLIT,$0
-// 	MOVQ z_len+8(FP), DI
-// 	CMPQ DI, $32
-// 	JG large
-// 	MOVQ x+24(FP), R8
-// 	MOVQ y+48(FP), CX	// c = y
-// 	MOVQ z+0(FP), R10
-// 
-// 	MOVQ $0, SI		// i = 0
-// 
-// 	// s/JL/JMP/ below to disable the unrolled loop
-// 	SUBQ $4, DI		// n -= 4
-// 	JL V4			// if n < 4 goto V4
-// 
-// U4:	// n >= 0
-// 	// regular loop body unrolled 4x
-// 	MOVQ 0(R8)(SI*8), R11
-// 	MOVQ 8(R8)(SI*8), R12
-// 	MOVQ 16(R8)(SI*8), R13
-// 	MOVQ 24(R8)(SI*8), R14
-// 	SUBQ CX, R11
-// 	SBBQ $0, R12
-// 	SBBQ $0, R13
-// 	SBBQ $0, R14
-// 	SBBQ CX, CX		// save CF
-// 	NEGQ CX
-// 	MOVQ R11, 0(R10)(SI*8)
-// 	MOVQ R12, 8(R10)(SI*8)
-// 	MOVQ R13, 16(R10)(SI*8)
-// 	MOVQ R14, 24(R10)(SI*8)
-// 
-// 	ADDQ $4, SI		// i += 4
-// 	SUBQ $4, DI		// n -= 4
-// 	JGE U4			// if n >= 0 goto U4
-// 
-// V4:	ADDQ $4, DI		// n += 4
-// 	JLE E4			// if n <= 0 goto E4
-// 
-// L4:	// n > 0
-// 	MOVQ 0(R8)(SI*8), R11
-// 	SUBQ CX, R11
-// 	MOVQ R11, 0(R10)(SI*8)
-// 	SBBQ CX, CX		// save CF
-// 	NEGQ CX
-// 
-// 	ADDQ $1, SI		// i++
-// 	SUBQ $1, DI		// n--
-// 	JG L4			// if n > 0 goto L4
-// 
-// E4:	MOVQ CX, c+56(FP)	// return c
-// 	RET
-// large:
-// 	JMP ·subVWlarge(SB)
-// 
-// 
+// func add10VW(z, x []Word, y Word) (c Word)
+TEXT ·add10VW(SB),NOSPLIT,$0
+	MOVQ z_len+8(FP), DI
+	MOVQ x+24(FP), R8
+	MOVQ y+48(FP), CX	// c = y
+	MOVQ z+0(FP), R10
+
+	MOVQ $0, SI			// i = 0
+	MOVQ $_DB, DX
+
+	// Once we start looping, we won't handle the hardware carry since
+	// x[i] < _DB, so x[i] + 1 < 1<<64-1 always.
+	// This still needs to be handled for the first element.
+
+	DECQ DI			// n--
+	JL E3			// abort if n < 0
+	ADDQ 0(R8)(SI*8), CX
+	LEAQ -1(DX), AX
+	SBBQ BX, BX
+	CMPQ AX, CX
+	SBBQ AX, AX
+	ORQ AX, BX
+	MOVQ DX, AX
+	ANDQ BX, AX
+	SUBQ AX, CX
+	NEGQ BX			// convert to C = 0/1
+	MOVQ CX, 0(R10)(SI*8)
+	MOVQ BX, CX		// save c
+	LEAQ 1(SI), SI	// i++
+	JG T3			// if c != 0 propagate
+	SUBQ $4, DI		
+	JL CV3			// if n < 4 goto CV3
+	CMPQ R8, R10
+	JEQ E3			// don't copy if &x[0] == &z[0]
+	JMP CU3
+
+T3:
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V3			// if n < 4 goto V3
+
+U3:	// n >= 0
+	// regular loop body unrolled 4x
+	ADDQ 0(R8)(SI*8), CX
+	CMPQ CX, DX
+	SBBQ BX, BX
+	ANDQ BX, CX
+	MOVQ CX, 0(R10)(SI*8)
+	LEAQ 1(BX), CX
+	ADDQ 8(R8)(SI*8), CX
+	CMPQ CX, DX
+	SBBQ BX, BX
+	ANDQ BX, CX
+	MOVQ CX, 8(R10)(SI*8)
+	LEAQ 1(BX), CX
+	ADDQ 16(R8)(SI*8), CX
+	CMPQ CX, DX
+	SBBQ BX, BX
+	ANDQ BX, CX
+	MOVQ CX, 16(R10)(SI*8)
+	LEAQ 1(BX), CX
+	ADDQ 24(R8)(SI*8), CX
+	CMPQ CX, DX
+	SBBQ BX, BX
+	ANDQ BX, CX
+	MOVQ CX, 24(R10)(SI*8)
+	LEAQ 1(BX), CX
+	TESTQ BX, BX
+	JL C3
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U3			// if n >= 0 goto U3
+
+V3:	ADDQ $4, DI		// n += 4
+	JLE E3			// if n <= 0 goto E3
+
+L3:	// n > 0
+	ADDQ 0(R8)(SI*8), CX
+	CMPQ CX, DX
+	SBBQ BX, BX		// BX = _DB > CX ? -1 : 0
+	ANDQ BX, CX		// sets CX to 0 if CX >= _DB
+	MOVQ CX, 0(R10)(SI*8)
+	LEAQ 1(BX), CX	// eqv to NOTQ BX, NEGQ BX, MOVQ BX CX
+
+	INCQ SI			// i++
+	DECQ DI			// n--
+	JG L3			// if n > 0 goto L3
+
+E3:	MOVQ CX, c+56(FP)	// return c
+	RET
+
+C3: // memcpy
+	CMPQ R8, R10	// don't copy if &x[0] == &z[0]
+	JEQ CE3
+	ADDQ $4, SI
+	SUBQ $4, DI
+	JL CV3
+
+CU3: // n >= 4
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ 8(R8)(SI*8), BX
+	MOVQ 16(R8)(SI*8), CX
+	MOVQ 24(R8)(SI*8), DX
+	MOVQ AX, 0(R10)(SI*8)
+	MOVQ BX, 8(R10)(SI*8)
+	MOVQ CX, 16(R10)(SI*8)
+	MOVQ DX, 24(R10)(SI*8)
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE CU3			// if n >= 0 goto C3
+CV3:
+	ADDQ $4, DI
+	JLE CE3
+CL3:
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ AX, 0(R10)(SI*8)
+	INCQ SI
+	DECQ DI
+	JG CL3
+CE3:
+	MOVQ $0, c+56(FP)
+	RET
+
+// func sub10VW(z, x []Word, y Word) (c Word)
+// (same as add10VW except for SUBQ/SBBQ instead of ADDQ/ADCQ and label names)
+TEXT ·sub10VW(SB),NOSPLIT,$0
+	MOVQ z_len+8(FP), DI
+	MOVQ x+24(FP), R8
+	MOVQ y+48(FP), CX	// c = y
+	MOVQ z+0(FP), R10
+
+	XORQ SI, SI			// i = 0
+	MOVQ $_DB, DX
+
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V4			// if n < 4 goto V4
+
+U4:	// n >= 0
+	// regular loop body unrolled 4x
+	MOVQ 0(R8)(SI*8), BX
+	SUBQ CX, BX
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, BX
+	MOVQ BX, 0(R10)(SI*8)
+	NEGQ CX
+	MOVQ 8(R8)(SI*8), BX
+	SUBQ CX, BX
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, BX
+	MOVQ BX, 8(R10)(SI*8)
+	NEGQ CX
+	MOVQ 16(R8)(SI*8), BX
+	SUBQ CX, BX
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, BX
+	MOVQ BX, 16(R10)(SI*8)
+	NEGQ CX
+	MOVQ 24(R8)(SI*8), BX
+	SUBQ CX, BX
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, BX
+	MOVQ BX, 24(R10)(SI*8)
+	NEGQ CX
+	JCC C4
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U4			// if n >= 0 goto U4
+
+V4:	ADDQ $4, DI		// n += 4
+	JLE E4			// if n <= 0 goto E4
+
+L4:	// n > 0
+	MOVQ 0(R8)(SI*8), R11
+	SUBQ CX, R11
+	SBBQ CX, CX
+	MOVQ DX, AX
+	ANDQ CX, AX
+	ADDQ AX, R11
+	NEGQ CX
+	MOVQ R11, 0(R10)(SI*8)
+
+	INCQ SI			// i++
+	DECQ DI			// n--
+	JG L4			// if n > 0 goto L4
+
+E4:	MOVQ CX, c+56(FP)	// return c
+	RET
+
+C4: // memcpy
+	CMPQ R8, R10	// don't copy if &x[0] == &z[0]
+	JEQ CE4
+	ADDQ $4, SI
+	SUBQ $4, DI
+	JL CV4
+CU4: // n >= 4
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ 8(R8)(SI*8), BX
+	MOVQ 16(R8)(SI*8), CX
+	MOVQ 24(R8)(SI*8), DX
+	MOVQ AX, 0(R10)(SI*8)
+	MOVQ BX, 8(R10)(SI*8)
+	MOVQ CX, 16(R10)(SI*8)
+	MOVQ DX, 24(R10)(SI*8)
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE CU4			// if n >= 0 goto C4
+CV4:
+	ADDQ $4, DI
+	JLE CE4
+CL4:
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ AX, 0(R10)(SI*8)
+	INCQ SI
+	DECQ DI
+	JG CL4
+CE4:
+	MOVQ $0, c+56(FP)
+	RET
+
 // // func shlVU(z, x []Word, s uint) (c Word)
 // TEXT ·shlVU(SB),NOSPLIT,$0
 // 	MOVQ z_len+8(FP), BX	// i = z

@@ -181,8 +181,8 @@ L1:	// n > 0
 	SUBQ AX, R11
 	MOVQ R11, 0(R10)(SI*8)
 
-	INCQ SI			// i++
-	DECQ DI			// n--
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
 	JG L1			// if n > 0 goto L1
 
 E1: NEGQ CX
@@ -256,8 +256,8 @@ L2:	// n > 0
 	ADDQ AX, R11
 	MOVQ R11, 0(R10)(SI*8)
 
-	INCQ SI			// i++
-	DECQ DI			// n--
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
 	JG L2			// if n > 0 goto L2
 
 E2:	NEGQ CX
@@ -278,7 +278,7 @@ TEXT ·add10VW(SB),NOSPLIT,$0
 	// x[i] < _DB, so x[i] + 1 < 1<<64-1 always.
 	// This still needs to be handled for the first element.
 
-	DECQ DI			// n--
+	SUBQ $1, DI		// n--
 	JL E3			// abort if n < 0
 	ADDQ 0(R8)(SI*8), CX
 	LEAQ -1(DX), AX
@@ -292,18 +292,25 @@ TEXT ·add10VW(SB),NOSPLIT,$0
 	NEGQ BX			// convert to C = 0/1
 	MOVQ CX, 0(R10)(SI*8)
 	MOVQ BX, CX		// save c
-	LEAQ 1(SI), SI	// i++
-	JG T3			// if c != 0 propagate
-	SUBQ $4, DI		
-	JL CV3			// if n < 4 goto CV3
+	ADDQ $1, SI		// i++
+
+	// z[1:] ...
+
+	// We do not check the carry value to switch to a memcpy for small slices
+	// (len < 4). This seems to be a good trade-off to the cost of additional
+	// jumps/function calls.
+
+	// s/JL/JMP/ below to disable the unrolled loop and memcpy
+	SUBQ $4, DI		// n -= 4
+	JL V3			// if n < 4 goto V3.
+
+	TESTQ CX, CX
+	JNE U3			// if c != 0 propagate
 	CMPQ R8, R10
 	JEQ E3			// don't copy if &x[0] == &z[0]
-	JMP CU3
-
-T3:
-	// s/JL/JMP/ below to disable the unrolled loop
-	SUBQ $4, DI		// n -= 4
-	JL V3			// if n < 4 goto V3
+	ADDQ $4, DI
+	MOVQ CX, c+56(FP)
+	JMP decCpy(SB)
 
 U3:	// n >= 0
 	// regular loop body unrolled 4x
@@ -331,10 +338,10 @@ U3:	// n >= 0
 	ANDQ BX, CX
 	MOVQ CX, 24(R10)(SI*8)
 	LEAQ 1(BX), CX
-	TESTQ BX, BX
-	JL C3
 
 	ADDQ $4, SI		// i += 4
+	TESTQ BX, BX
+	JL C3
 	SUBQ $4, DI		// n -= 4
 	JGE U3			// if n >= 0 goto U3
 
@@ -349,8 +356,8 @@ L3:	// n > 0
 	MOVQ CX, 0(R10)(SI*8)
 	LEAQ 1(BX), CX	// eqv to NOTQ BX, NEGQ BX, MOVQ BX CX
 
-	INCQ SI			// i++
-	DECQ DI			// n--
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
 	JG L3			// if n > 0 goto L3
 
 E3:	MOVQ CX, c+56(FP)	// return c
@@ -358,35 +365,9 @@ E3:	MOVQ CX, c+56(FP)	// return c
 
 C3: // memcpy
 	CMPQ R8, R10	// don't copy if &x[0] == &z[0]
-	JEQ CE3
-	ADDQ $4, SI
-	SUBQ $4, DI
-	JL CV3
-
-CU3: // n >= 4
-	MOVQ 0(R8)(SI*8), AX
-	MOVQ 8(R8)(SI*8), BX
-	MOVQ 16(R8)(SI*8), CX
-	MOVQ 24(R8)(SI*8), DX
-	MOVQ AX, 0(R10)(SI*8)
-	MOVQ BX, 8(R10)(SI*8)
-	MOVQ CX, 16(R10)(SI*8)
-	MOVQ DX, 24(R10)(SI*8)
-	ADDQ $4, SI		// i += 4
-	SUBQ $4, DI		// n -= 4
-	JGE CU3			// if n >= 0 goto C3
-CV3:
-	ADDQ $4, DI
-	JLE CE3
-CL3:
-	MOVQ 0(R8)(SI*8), AX
-	MOVQ AX, 0(R10)(SI*8)
-	INCQ SI
-	DECQ DI
-	JG CL3
-CE3:
-	MOVQ $0, c+56(FP)
-	RET
+	JEQ E3
+	MOVQ CX, c+56(FP)
+	JMP decCpy(SB)
 
 // func sub10VW(z, x []Word, y Word) (c Word)
 // (same as add10VW except for SUBQ/SBBQ instead of ADDQ/ADCQ and label names)
@@ -437,9 +418,9 @@ U4:	// n >= 0
 	ADDQ AX, BX
 	MOVQ BX, 24(R10)(SI*8)
 	NEGQ CX
-	JCC C4
 
-	ADDQ $4, SI		// i += 4
+	LEAQ 4(SI), SI	// i += 4
+	JCC C4			// if CX == 0 goto C4 (memcpy)
 	SUBQ $4, DI		// n -= 4
 	JGE U4			// if n >= 0 goto U4
 
@@ -456,8 +437,8 @@ L4:	// n > 0
 	NEGQ CX
 	MOVQ R11, 0(R10)(SI*8)
 
-	INCQ SI			// i++
-	DECQ DI			// n--
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
 	JG L4			// if n > 0 goto L4
 
 E4:	MOVQ CX, c+56(FP)	// return c
@@ -465,11 +446,16 @@ E4:	MOVQ CX, c+56(FP)	// return c
 
 C4: // memcpy
 	CMPQ R8, R10	// don't copy if &x[0] == &z[0]
-	JEQ CE4
-	ADDQ $4, SI
-	SUBQ $4, DI
-	JL CV4
-CU4: // n >= 4
+	JEQ E4
+	MOVQ CX, c+56(FP)
+	JMP decCpy(SB)
+
+// func decCpy(dst = R10, src = R8, i = DI, n = SI)
+TEXT decCpy(SB),NOSPLIT,$0
+	SUBQ $4, DI		// n -= 4
+	JL CV			// if n < 0 goto CV
+
+CU: // n >= 4
 	MOVQ 0(R8)(SI*8), AX
 	MOVQ 8(R8)(SI*8), BX
 	MOVQ 16(R8)(SI*8), CX
@@ -480,18 +466,17 @@ CU4: // n >= 4
 	MOVQ DX, 24(R10)(SI*8)
 	ADDQ $4, SI		// i += 4
 	SUBQ $4, DI		// n -= 4
-	JGE CU4			// if n >= 0 goto C4
-CV4:
+	JGE CU			// if n >= 0 goto C4
+CV:
 	ADDQ $4, DI
-	JLE CE4
-CL4:
+	JLE CE
+CLoop:
 	MOVQ 0(R8)(SI*8), AX
 	MOVQ AX, 0(R10)(SI*8)
-	INCQ SI
-	DECQ DI
-	JG CL4
-CE4:
-	MOVQ $0, c+56(FP)
+	ADDQ $1, SI
+	SUBQ $1, DI
+	JG CLoop
+CE:
 	RET
 
 // // func shlVU(z, x []Word, s uint) (c Word)

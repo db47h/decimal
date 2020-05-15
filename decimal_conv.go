@@ -27,7 +27,7 @@ func (z *Decimal) SetString(s string) (*Decimal, bool) {
 func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error) {
 	prec := z.prec
 	if prec == 0 {
-		prec = _DW
+		prec = DefaultDecimalPrec
 	}
 
 	// A reasonable value in case of an error.
@@ -87,7 +87,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 		d := int64(fcount)
 		switch b {
 		case 10:
-			exp10 = d
+			exp10 += d
 		case 2:
 			exp2 += d
 		case 8:

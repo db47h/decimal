@@ -7,3 +7,6 @@
 package decimal
 
 var support_adx = false
+
+// keep golint quiet
+var _ = support_adx

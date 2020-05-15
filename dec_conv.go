@@ -216,8 +216,6 @@ func (x dec) itoa(neg bool, base int) []byte {
 	return s[i:]
 }
 
-type divisor struct{}
-
 // TODO(db47h): implement recursive algorithm
 func (q dec) convertWords(s []byte, b Word, ndigits int, bb Word, table []decDivisor) {
 	// split larger blocks recursively
@@ -277,5 +275,9 @@ func (z dec) expWW(x, y Word) dec {
 }
 
 func divisors(m int, b Word, ndigits int, bb Word) []decDivisor {
+	// keep golint quiet
+	if decLeafSize > 100 {
+		_ = decDivisor{bbb: dec(nil), nbits: 0, ndigits: 0}
+	}
 	return nil
 }

@@ -317,9 +317,13 @@ func TestDecScanPiParallel(t *testing.T) {
 }
 
 func BenchmarkDecScanPi(b *testing.B) {
+	var err error
 	for i := 0; i < b.N; i++ {
 		var x dec
-		x.scan(strings.NewReader(pi), 10, false)
+		_, _, _, err = x.scan(strings.NewReader(pi), 10, false)
+	}
+	if err != nil {
+		b.Fatalf("scan failed%s", err)
 	}
 }
 
@@ -353,9 +357,12 @@ func BenchmarkDecScan(b *testing.B) {
 					b.Fatalf("scanning: got %s; want %s", s, t)
 				}
 				b.StartTimer()
-
+				var err error
 				for i := 0; i < b.N; i++ {
-					z.scan(bytes.NewReader(s), base, false)
+					_, _, _, err = z.scan(bytes.NewReader(s), base, false)
+				}
+				if err != nil {
+					b.Fatalf("scan failed%s", err)
 				}
 			})
 		}

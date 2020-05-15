@@ -131,7 +131,7 @@ func scanSign(r io.ByteScanner) (neg bool, err error) {
 	case '+':
 		// nothing to do
 	default:
-		r.UnreadByte()
+		_ = r.UnreadByte()
 	}
 	return
 }
@@ -157,7 +157,7 @@ func scanExponent(r io.ByteScanner, base2ok, sepOk bool) (exp int64, base int, e
 		}
 		fallthrough // binary exponent not permitted
 	default:
-		r.UnreadByte() // ch does not belong to exponent anymore
+		_ = r.UnreadByte() // ch does not belong to exponent anymore
 		return 0, 10, nil
 	}
 
@@ -190,7 +190,7 @@ func scanExponent(r io.ByteScanner, base2ok, sepOk bool) (exp int64, base int, e
 			}
 			prev = '_'
 		} else {
-			r.UnreadByte() // ch does not belong to number anymore
+			_ = r.UnreadByte() // ch does not belong to number anymore
 			break
 		}
 		ch, err = r.ReadByte()
@@ -241,10 +241,18 @@ func (err ErrNaN) Error() string {
 
 type nat []Word
 
+const divRecursiveThreshold = 100
+
 // Operands that are shorter than karatsubaThreshold are multiplied using
 // "grade school" multiplication; for longer operands the Karatsuba algorithm
 // is used.
 const karatsubaThreshold = 40 // computed by calibrate_test.go
+
+// Operands that are shorter than basicSqrThreshold are squared using
+// "grade school" multiplication; for operands longer than karatsubaSqrThreshold
+// we use the Karatsuba algorithm optimized for x == y.
+var basicSqrThreshold = 20      // computed by calibrate_test.go
+var karatsubaSqrThreshold = 260 // computed by calibrate_test.go
 
 // karatsubaLen computes an approximation to the maximum k <= n such that
 // k = p/10**i for a number p <= threshold and an i >= 0. Thus, the
@@ -266,8 +274,7 @@ func max(x, y int) int {
 	return y
 }
 
-// Operands that are shorter than basicSqrThreshold are squared using
-// "grade school" multiplication; for operands longer than karatsubaSqrThreshold
-// we use the Karatsuba algorithm optimized for x == y.
-var basicSqrThreshold = 20      // computed by calibrate_test.go
-var karatsubaSqrThreshold = 260 // computed by calibrate_test.go
+// greaterThan reports whether (x1*_BD + x2) > (y1*_BD + y2)
+func greaterThan(x1, x2, y1, y2 Word) bool {
+	return x1 > y1 || x1 == y1 && x2 > y2
+}

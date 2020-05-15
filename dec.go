@@ -23,7 +23,6 @@ type dec []Word
 
 var (
 	decOne = dec{1}
-	decTwo = dec{2}
 	decTen = dec{10}
 )
 
@@ -315,8 +314,6 @@ func putDec(x *dec) {
 
 var decPool sync.Pool
 
-const divRecursiveThreshold = 100
-
 // q = (uIn-r)/vIn, with 0 <= r < vIn
 // Uses z as storage for q, and u as storage for r if possible.
 // See Knuth, Volume 2, section 4.3.1, Algorithm D.
@@ -427,11 +424,6 @@ func (q dec) divBasic(u, v dec) {
 	}
 
 	putDec(qhatvp)
-}
-
-// greaterThan reports whether (x1*_BD + x2) > (y1*_BD + y2)
-func greaterThan(x1, x2, y1, y2 Word) bool {
-	return x1 > y1 || x1 == y1 && x2 > y2
 }
 
 // modW returns x % d.

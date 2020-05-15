@@ -447,7 +447,6 @@ var mul10WWTests = []struct {
 	q, r Word
 }{
 	{_DMax, _DMax, _DMax - 1, 1},
-	// 32 bit only: {0xc47dfa8c, 50911, 0x98a4, 0x998587f4},
 }
 
 func TestDecMul10WW(t *testing.T) {
@@ -467,9 +466,6 @@ var mulAdd10WWWTests = []struct {
 	x, y, c Word
 	q, r    Word
 }{
-	// TODO(db47h): These will only work on 64-bit platforms.
-	// {15064310297182388543, 0xe7df04d2d35d5d80, 13537600649892366549, 13644450054494335067, 10832252001440893781},
-	// {15064310297182388543, 0xdab2f18048baa68d, 13644450054494335067, 12869334219691522700, 14233854684711418382},
 	{_DMax, _DMax, 0, _DMax - 1, 1},
 	{_DMax, _DMax, _DMax, _DMax, 0},
 }

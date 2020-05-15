@@ -846,11 +846,7 @@ func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
 }
 
 func BenchmarkDecimalDiv(b *testing.B) {
-	sizes := []int{
-		10, 20, 50, 100, 200, 500, 1000,
-		1e4, 1e5, 1e6, 1e7,
-		//		TODO(db47h): enable these after optimizing
-	}
+	sizes := []int{10, 20, 50, 100, 200, 500, 1000, 1e4}
 	for _, i := range sizes {
 		j := 2 * i
 		b.Run(fmt.Sprintf("%d/%d", j, i), func(b *testing.B) {

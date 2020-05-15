@@ -8,6 +8,7 @@
 
 #define _DB  10000000000000000000
 #define _DMax 9999999999999999999
+#define _DW 19
 
 // This file provides fast assembly versions for the elementary
 // arithmetic operations on vectors implemented in arith.go.
@@ -19,6 +20,7 @@ TEXT ·mul10WW(SB),NOSPLIT,$0
 	MOVQ DX, x+0(FP)
 	MOVQ AX, y+8(FP)
 	JMP div10WInternal(SB)
+
 
 // func div10WW(x1, x0, y Word) (q, r Word)
 TEXT ·div10WW(SB),NOSPLIT,$0
@@ -32,6 +34,7 @@ TEXT ·div10WW(SB),NOSPLIT,$0
 	MOVQ AX, q+24(FP)
 	MOVQ DX, r+32(FP)
 	RET
+
 
 // func div10W(n1, n0 Word) (q, r Word)
 TEXT ·div10W(SB),NOSPLIT,$0
@@ -66,7 +69,9 @@ TEXT ·div10W(SB),NOSPLIT,$0
 	MOVQ AX, r+24(FP)
 	RET
 
+
 // internal version taking arguments DX = n1, AX = n0
+// trashes R8, R9, AX, BX, CX, DX
 TEXT div10WInternal(SB),NOSPLIT,$0
 	MOVQ DX, R8
 	MOVQ AX, R9
@@ -94,6 +99,7 @@ TEXT div10WInternal(SB),NOSPLIT,$0
 	MOVQ DX, q+16(FP)
 	MOVQ AX, r+24(FP)
 	RET
+
 
 // The carry bit is saved with SBBQ Rx, Rx: if the carry was set, Rx is -1, otherwise it is 0.
 // It is restored with ADDQ Rx, Rx: if Rx was -1 the carry is set, otherwise it is cleared.
@@ -189,6 +195,7 @@ E1: NEGQ CX
 	MOVQ CX, c+72(FP)	// return c
 	RET
 
+
 // func sub10VV(z, x, y []Word) (c Word)
 TEXT ·sub10VV(SB),NOSPLIT,$0
 	MOVQ z_len+8(FP), DI
@@ -263,6 +270,7 @@ L2:	// n > 0
 E2:	NEGQ CX
 	MOVQ CX, c+72(FP)	// return c
 	RET
+
 
 // func add10VW(z, x []Word, y Word) (c Word)
 TEXT ·add10VW(SB),NOSPLIT,$0
@@ -368,6 +376,7 @@ C3: // memcpy
 	MOVQ CX, c+56(FP)
 	JMP decCpy(SB)
 
+
 // func sub10VW(z, x []Word, y Word) (c Word)
 // (same as add10VW except for SUBQ/SBBQ instead of ADDQ/ADCQ and label names)
 TEXT ·sub10VW(SB),NOSPLIT,$0
@@ -449,7 +458,8 @@ C4: // memcpy
 	MOVQ CX, c+56(FP)
 	JMP decCpy(SB)
 
-// func decCpy(dst = R10, src = R8, i = DI, n = SI)
+
+// func decCpy(dst = R10, src = R8, i = SI, n = DI)
 TEXT decCpy(SB),NOSPLIT,$0
 	SUBQ $4, DI		// n -= 4
 	JL CV			// if n < 0 goto CV
@@ -478,78 +488,151 @@ CLoop:
 CE:
 	RET
 
-// // func shlVU(z, x []Word, s uint) (c Word)
-// TEXT ·shlVU(SB),NOSPLIT,$0
-// 	MOVQ z_len+8(FP), BX	// i = z
-// 	SUBQ $1, BX		// i--
-// 	JL X8b			// i < 0	(n <= 0)
-// 
-// 	// n > 0
-// 	MOVQ z+0(FP), R10
-// 	MOVQ x+24(FP), R8
-// 	MOVQ s+48(FP), CX
-// 	MOVQ (R8)(BX*8), AX	// w1 = x[n-1]
-// 	MOVQ $0, DX
-// 	SHLQ CX, AX, DX		// w1>>ŝ
-// 	MOVQ DX, c+56(FP)
-// 
-// 	CMPQ BX, $0
-// 	JLE X8a			// i <= 0
-// 
-// 	// i > 0
-// L8:	MOVQ AX, DX		// w = w1
-// 	MOVQ -8(R8)(BX*8), AX	// w1 = x[i-1]
-// 	SHLQ CX, AX, DX		// w<<s | w1>>ŝ
-// 	MOVQ DX, (R10)(BX*8)	// z[i] = w<<s | w1>>ŝ
-// 	SUBQ $1, BX		// i--
-// 	JG L8			// i > 0
-// 
-// 	// i <= 0
-// X8a:	SHLQ CX, AX		// w1<<s
-// 	MOVQ AX, (R10)		// z[0] = w1<<s
-// 	RET
-// 
-// X8b:	MOVQ $0, c+56(FP)
-// 	RET
-// 
-// 
-// // func shrVU(z, x []Word, s uint) (c Word)
-// TEXT ·shrVU(SB),NOSPLIT,$0
-// 	MOVQ z_len+8(FP), R11
-// 	SUBQ $1, R11		// n--
-// 	JL X9b			// n < 0	(n <= 0)
-// 
-// 	// n > 0
-// 	MOVQ z+0(FP), R10
-// 	MOVQ x+24(FP), R8
-// 	MOVQ s+48(FP), CX
-// 	MOVQ (R8), AX		// w1 = x[0]
-// 	MOVQ $0, DX
-// 	SHRQ CX, AX, DX		// w1<<ŝ
-// 	MOVQ DX, c+56(FP)
-// 
-// 	MOVQ $0, BX		// i = 0
-// 	JMP E9
-// 
-// 	// i < n-1
-// L9:	MOVQ AX, DX		// w = w1
-// 	MOVQ 8(R8)(BX*8), AX	// w1 = x[i+1]
-// 	SHRQ CX, AX, DX		// w>>s | w1<<ŝ
-// 	MOVQ DX, (R10)(BX*8)	// z[i] = w>>s | w1<<ŝ
-// 	ADDQ $1, BX		// i++
-// 
-// E9:	CMPQ BX, R11
-// 	JL L9			// i < n-1
-// 
-// 	// i >= n-1
-// X9a:	SHRQ CX, AX		// w1>>s
-// 	MOVQ AX, (R10)(R11*8)	// z[n-1] = w1>>s
-// 	RET
-// 
-// X9b:	MOVQ $0, c+56(FP)
-// 	RET
-// 
-// 
+
+// func decCpyInv(dst = R10, src = R8, n = SI)
+// copies from hi to low address
+TEXT decCpyInv(SB),NOSPLIT,$0
+	SUBQ $4, SI
+	JL CV
+
+CU: // n >= 4
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ 8(R8)(SI*8), BX
+	MOVQ 16(R8)(SI*8), CX
+	MOVQ 24(R8)(SI*8), DX
+	MOVQ AX, 0(R10)(SI*8)
+	MOVQ BX, 8(R10)(SI*8)
+	MOVQ CX, 16(R10)(SI*8)
+	MOVQ DX, 24(R10)(SI*8)
+	SUBQ $4, SI		// n -= 4
+	JGE CU			// if n >= 0 goto C4
+CV:
+	ADDQ $3, SI
+	JL CE
+CLoop:
+	MOVQ 0(R8)(SI*8), AX
+	MOVQ AX, 0(R10)(SI*8)
+	SUBQ $1, SI
+	JGE CLoop
+CE:
+	RET
+
+
+// func shl10VU(z, x []Word, s uint) (c Word)
+TEXT ·shl10VU(SB),NOSPLIT,$0
+	MOVQ z_len+8(FP), SI	// i = z
+	SUBQ $1, SI				// i--
+	JL X8b					// i < 0	(n <= 0)
+
+	// n > 0
+ 	MOVQ z+0(FP), R10
+ 	MOVQ x+24(FP), R8
+ 	MOVQ s+48(FP), BX
+	TESTQ BX, BX
+	JEQ X8c		// copy if s = 0
+
+	MOVQ $_DW, CX
+	LEAQ ·pow10s(SB), DI
+	SUBQ BX, CX
+	MOVQ 0(DI)(BX*8), R12 // m = pow10(s)
+	MOVQ 0(DI)(CX*8), R11 // d = pow10(_DW-s)
+
+	XORQ DX, DX
+	MOVQ 0(R8)(SI*8), AX
+	DIVQ R11		// AX:DX = x[len(x)-1] / d
+	MOVQ AX, BX		// save r
+	MOVQ DX, AX
+
+	TESTQ SI, SI
+	JEQ X8a
+L8:
+	MULQ R12
+	MOVQ AX, CX		// z[i] = l*m
+	XORQ DX, DX
+	MOVQ -8(R8)(SI*8), AX
+	DIVQ R11		// q, r = div(0, x[i-1], d)
+	ADDQ AX, CX		// z[i] += q
+	MOVQ DX, AX
+	MOVQ CX, 0(R10)(SI*8)
+	SUBQ $1, SI
+	JG L8
+X8a:
+	MULQ R12
+	MOVQ AX, 0(R10)(SI*8)
+	MOVQ BX, c+56(FP)
+	RET
+X8b:
+	MOVQ $0, c+56(FP)
+	RET
+X8c:
+	CMPQ R10, R8
+	JEQ X8b
+	ADDQ $1, SI
+	MOVQ $0, c+56(FP)
+	JMP decCpyInv(SB)
+
+
+// func shr10VU(z, x []Word, s uint) (c Word)
+TEXT ·shr10VU(SB),NOSPLIT,$0
+	MOVQ z_len+8(FP), DI
+	SUBQ $1, DI		// n--
+	JL X9b			// n < 0	(n <= 0)
+
+	// n > 0
+ 	MOVQ z+0(FP), R10
+ 	MOVQ x+24(FP), R8
+ 	MOVQ s+48(FP), BX
+	TESTQ BX, BX
+	JEQ X9c		// copy if s = 0
+
+	MOVQ $_DW, CX
+	LEAQ ·pow10s(SB), SI
+	SUBQ BX, CX
+	MOVQ 0(SI)(BX*8), R11 // d = pow10(s)
+	MOVQ 0(SI)(CX*8), R12 // m = pow10(_DW-s)
+
+	XORQ DX, DX
+	MOVQ 0(R8), AX
+	DIVQ R11		// AX:DX = x[0] / d
+	MOVQ DX, R13	// r
+	MOVQ AX, BX		// h
+
+	MOVQ $0, SI
+	CMPQ SI, DI
+	JGE X9a			// if i >= len(x)-1 goto X9a
+
+L9:
+	MOVQ BX, CX		// z[i] = h
+	XORQ DX, DX
+	MOVQ 8(R8)(SI*8), AX
+	DIVQ R11		// h, l = AX:DX = divWW(x[i], d)
+	MOVQ AX, BX		// save h
+	MOVQ DX, AX
+	XORQ DX, DX
+	MULQ R12		// AX = l*m
+	ADDQ AX, CX		// zi += l*m
+	MOVQ CX, 0(R10)(SI*8)
+	ADDQ $1, SI
+	CMPQ SI, DI
+	JL L9
+X9a:
+	MOVQ BX, 0(R10)(SI*8)
+	MOVQ R13, AX
+	MULQ R12
+	MOVQ AX, c+56(FP)
+	RET
+X9b:
+	MOVQ $0, c+56(FP)
+ 	RET
+X9c:
+	CMPQ R10, R8
+	JEQ X9b
+	ADDQ $1, DI
+	XORQ SI, SI
+	MOVQ $0, c+56(FP)
+	JMP decCpy(SB)
+
+
 // // func mulAddVWW(z, x []Word, y, r Word) (c Word)
 // TEXT ·mulAddVWW(SB),NOSPLIT,$0
 // 	MOVQ z+0(FP), R10
@@ -754,24 +837,27 @@ CE:
 // 
 // 	MOVQ CX, c+56(FP)
 // 	RET
-// 
-// 
-// 
-// // func divWVW(z []Word, xn Word, x []Word, y Word) (r Word)
-// TEXT ·divWVW(SB),NOSPLIT,$0
-// 	MOVQ z+0(FP), R10
-// 	MOVQ xn+24(FP), DX	// r = xn
-// 	MOVQ x+32(FP), R8
-// 	MOVQ y+56(FP), R9
-// 	MOVQ z_len+8(FP), BX	// i = z
-// 	JMP E7
-// 
-// L7:	MOVQ (R8)(BX*8), AX
-// 	DIVQ R9
-// 	MOVQ AX, (R10)(BX*8)
-// 
-// E7:	SUBQ $1, BX		// i--
-// 	JGE L7			// i >= 0
-// 
-// 	MOVQ DX, r+64(FP)
-// 	RET
+
+
+// func div10VWW(z, x []Word, y, xn Word) (r Word)
+TEXT ·div10VWW(SB),NOSPLIT,$0
+	MOVQ z+0(FP), R10
+	MOVQ x+24(FP), R8
+	MOVQ y+48(FP), R9
+	MOVQ xn+56(FP), DX		// r = xn
+	MOVQ z_len+8(FP), SI	// i = z
+	MOVQ $_DB, CX
+	JMP E7
+
+L7: MOVQ DX, AX
+	MULQ CX
+	ADDQ (R8)(SI*8), AX
+	ADCQ $0, DX
+	DIVQ R9
+	MOVQ AX, (R10)(SI*8)
+
+E7:	SUBQ $1, SI		// i--
+	JGE L7			// i >= 0
+
+	MOVQ DX, r+64(FP)
+	RET

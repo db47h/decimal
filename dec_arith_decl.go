@@ -17,15 +17,11 @@ func add10VW(z, x []Word, y Word) (c Word)
 
 func sub10VW(z, x []Word, y Word) (c Word)
 
+func shl10VU(z, x []Word, s uint) (c Word)
+
+func shr10VU(z, x []Word, s uint) (c Word)
+
 // Not implemented yet
-
-func shl10VU(z, x []Word, s uint) (c Word) {
-	return shl10VU_g(z, x, s)
-}
-
-func shr10VU(z, x []Word, s uint) (c Word) {
-	return shr10VU_g(z, x, s)
-}
 
 func mulAdd10VWW(z, x []Word, y, r Word) (c Word) {
 	return mulAdd10VWW_g(z, x, y, r)
@@ -35,6 +31,4 @@ func addMul10VVW(z, x []Word, y Word) (c Word) {
 	return addMul10VVW_g(z, x, y)
 }
 
-func div10VWW(z, x []Word, y, xn Word) (r Word) {
-	return div10VWW_g(z, x, y, xn)
-}
+func div10VWW(z, x []Word, y, xn Word) (r Word)

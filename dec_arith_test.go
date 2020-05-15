@@ -381,91 +381,66 @@ func BenchmarkSub10VW(b *testing.B) {
 	}
 }
 
-// TODO(db47h): complete port of the tests
+type fun10VWW func(z, x []Word, y, r Word) (c Word)
+type arg10VWW struct {
+	z, x dec
+	y, r Word
+	c    Word
+}
 
-// type funVWW func(z, x []Word, y, r Word) (c Word)
-// type argVWW struct {
-// 	z, x nat
-// 	y, r Word
-// 	c    Word
-// }
+var prod10VWW = []arg10VWW{
+	{},
+	{dec{0}, dec{0}, 0, 0, 0},
+	{dec{991}, dec{0}, 0, 991, 0},
+	{dec{0}, dec{_DMax}, 0, 0, 0},
+	{dec{991}, dec{_DMax}, 0, 991, 0},
+	{dec{0}, dec{0}, _DMax, 0, 0},
+	{dec{991}, dec{0}, _DMax, 991, 0},
+	{dec{1}, dec{1}, 1, 0, 0},
+	{dec{992}, dec{1}, 1, 991, 0},
+	{dec{22793}, dec{991}, 23, 0, 0},
+	{dec{22800}, dec{991}, 23, 7, 0},
+	{dec{0, 0, 0, 22793}, dec{0, 0, 0, 991}, 23, 0, 0},
+	{dec{7, 0, 0, 22793}, dec{0, 0, 0, 991}, 23, 7, 0},
+	{dec{0, 0, 0, 0}, dec{7893475, 7395495, 798547395, 68943}, 0, 0, 0},
+	{dec{991, 0, 0, 0}, dec{7893475, 7395495, 798547395, 68943}, 0, 991, 0},
+	{dec{0, 0, 0, 0}, dec{0, 0, 0, 0}, 894375984, 0, 0},
+	{dec{991, 0, 0, 0}, dec{0, 0, 0, 0}, 894375984, 991, 0},
+	{dec{_DMax - _DMax%10}, dec{_DMax}, 10, 0, 9},
+	{dec{_DMax}, dec{_DMax}, 10, 9, 9},
+	{dec{_DMax - _DMax%pow10(7)}, dec{_DMax}, pow10(7), 0, pow10(7) - 1},
+	{dec{_DMax - _DMax%pow10(7) + 9*pow10(6)}, dec{_DMax}, pow10(7), 9 * pow10(6), pow10(7) - 1},
+	{dec{_DMax - _DMax%pow10(7), _DMax, _DMax, _DMax}, dec{_DMax, _DMax, _DMax, _DMax}, pow10(7), 0, pow10(7) - 1},
+	{dec{_DMax - _DMax%pow10(7) + 9*pow10(6), _DMax, _DMax, _DMax}, dec{_DMax, _DMax, _DMax, _DMax}, pow10(7), 9 * pow10(6), pow10(7) - 1},
+}
 
-// var prodVWW = []argVWW{
-// 	{},
-// 	{nat{0}, nat{0}, 0, 0, 0},
-// 	{nat{991}, nat{0}, 0, 991, 0},
-// 	{nat{0}, nat{_M}, 0, 0, 0},
-// 	{nat{991}, nat{_M}, 0, 991, 0},
-// 	{nat{0}, nat{0}, _M, 0, 0},
-// 	{nat{991}, nat{0}, _M, 991, 0},
-// 	{nat{1}, nat{1}, 1, 0, 0},
-// 	{nat{992}, nat{1}, 1, 991, 0},
-// 	{nat{22793}, nat{991}, 23, 0, 0},
-// 	{nat{22800}, nat{991}, 23, 7, 0},
-// 	{nat{0, 0, 0, 22793}, nat{0, 0, 0, 991}, 23, 0, 0},
-// 	{nat{7, 0, 0, 22793}, nat{0, 0, 0, 991}, 23, 7, 0},
-// 	{nat{0, 0, 0, 0}, nat{7893475, 7395495, 798547395, 68943}, 0, 0, 0},
-// 	{nat{991, 0, 0, 0}, nat{7893475, 7395495, 798547395, 68943}, 0, 991, 0},
-// 	{nat{0, 0, 0, 0}, nat{0, 0, 0, 0}, 894375984, 0, 0},
-// 	{nat{991, 0, 0, 0}, nat{0, 0, 0, 0}, 894375984, 991, 0},
-// 	{nat{_M << 1 & _M}, nat{_M}, 1 << 1, 0, _M >> (_W - 1)},
-// 	{nat{_M<<1&_M + 1}, nat{_M}, 1 << 1, 1, _M >> (_W - 1)},
-// 	{nat{_M << 7 & _M}, nat{_M}, 1 << 7, 0, _M >> (_W - 7)},
-// 	{nat{_M<<7&_M + 1<<6}, nat{_M}, 1 << 7, 1 << 6, _M >> (_W - 7)},
-// 	{nat{_M << 7 & _M, _M, _M, _M}, nat{_M, _M, _M, _M}, 1 << 7, 0, _M >> (_W - 7)},
-// 	{nat{_M<<7&_M + 1<<6, _M, _M, _M}, nat{_M, _M, _M, _M}, 1 << 7, 1 << 6, _M >> (_W - 7)},
-// }
+func testFun10VWW(t *testing.T, msg string, f fun10VWW, a arg10VWW) {
+	z := make(nat, len(a.z))
+	c := f(z, a.x, a.y, a.r)
+	for i, zi := range z {
+		if zi != a.z[i] {
+			t.Errorf("%s%+v\n\tgot z[%d] = %d; want %d", msg, a, i, zi, a.z[i])
+			break
+		}
+	}
+	if c != a.c {
+		t.Errorf("%s%+v\n\tgot c = %d; want %d", msg, a, c, a.c)
+	}
+}
 
-// func testFunVWW(t *testing.T, msg string, f funVWW, a argVWW) {
-// 	z := make(nat, len(a.z))
-// 	c := f(z, a.x, a.y, a.r)
-// 	for i, zi := range z {
-// 		if zi != a.z[i] {
-// 			t.Errorf("%s%+v\n\tgot z[%d] = %#x; want %#x", msg, a, i, zi, a.z[i])
-// 			break
-// 		}
-// 	}
-// 	if c != a.c {
-// 		t.Errorf("%s%+v\n\tgot c = %#x; want %#x", msg, a, c, a.c)
-// 	}
-// }
+func TestDecFun10VWW(t *testing.T) {
+	for _, a := range prod10VWW {
+		arg := a
+		testFun10VWW(t, "mulAddVWW_g", mulAdd10VWW_g, arg)
+		testFun10VWW(t, "mulAddVWW", mulAdd10VWW, arg)
 
-// type funWVW func(z []Word, xn Word, x []Word, y Word) (r Word)
-// type argWVW struct {
-// 	z  nat
-// 	xn Word
-// 	x  nat
-// 	y  Word
-// 	r  Word
-// }
-
-// func testFunWVW(t *testing.T, msg string, f funWVW, a argWVW) {
-// 	z := make(nat, len(a.z))
-// 	r := f(z, a.xn, a.x, a.y)
-// 	for i, zi := range z {
-// 		if zi != a.z[i] {
-// 			t.Errorf("%s%+v\n\tgot z[%d] = %#x; want %#x", msg, a, i, zi, a.z[i])
-// 			break
-// 		}
-// 	}
-// 	if r != a.r {
-// 		t.Errorf("%s%+v\n\tgot r = %#x; want %#x", msg, a, r, a.r)
-// 	}
-// }
-
-// func TestFunVWW(t *testing.T) {
-// 	for _, a := range prodVWW {
-// 		arg := a
-// 		testFunVWW(t, "mulAddVWW_g", mulAddVWW_g, arg)
-// 		testFunVWW(t, "mulAddVWW", mulAddVWW, arg)
-
-// 		if a.y != 0 && a.r < a.y {
-// 			arg := argWVW{a.x, a.c, a.z, a.y, a.r}
-// 			testFunWVW(t, "divWVW_g", divWVW_g, arg)
-// 			testFunWVW(t, "divWVW", divWVW, arg)
-// 		}
-// 	}
-// }
+		if a.y != 0 && a.r < a.y {
+			arg := arg10VWW{a.x, a.z, a.y, a.c, a.r}
+			testFun10VWW(t, "divWVW_g", div10VWW_g, arg)
+			testFun10VWW(t, "divWVW", div10VWW, arg)
+		}
+	}
+}
 
 // var mulWWTests = []struct {
 // 	x, y Word

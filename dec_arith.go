@@ -252,7 +252,7 @@ func shr10VU_g(z, x []Word, s uint) (r Word) {
 
 	var h, l Word
 	d, m := pow10(s), pow10(_DW-s)
-	h, r = divWW(0, x[0], Word(d))
+	h, r = divWW(0, x[0], d)
 	for i := 1; i < len(z) && i < len(x); i++ {
 		t := h
 		h, l = divWW(0, x[i], d)

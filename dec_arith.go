@@ -285,10 +285,7 @@ func addMul10VVW_g(z, x []Word, y Word) (c Word) {
 func div10VWW_g(z, x []Word, y, xn Word) (r Word) {
 	r = xn
 	for i := len(z) - 1; i >= 0; i-- {
-		// z[i], r = div10WW(r, x[i], y)
-		// FORCE INLINE
-		hi, lo := mulAddWWW_g(r, _DB, x[i])
-		z[i], r = divWW_g(hi, lo, y)
+		z[i], r = div10WW_g(r, x[i], y)
 	}
 	return
 }
@@ -344,4 +341,8 @@ func div10W_g(n1, n0 Word) (q, r Word) {
 	// q = drHi - (-1-q1)
 	// r = drLow + (d & drHi)
 	return drHi - t, drLo + d&drHi
+}
+
+func mulAdd10WWW_g(x, y, c Word) (hi, lo Word) {
+	return div10W(mulAddWWW_g(x, y, c))
 }

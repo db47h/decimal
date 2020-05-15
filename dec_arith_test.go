@@ -203,7 +203,7 @@ var rsh10VW = []arg10VW{
 
 func testFun10VW(t *testing.T, msg string, f fun10VW, a arg10VW) {
 	n := len(a.z)
-	z := make(nat, n+1)
+	z := make(dec, n+1)
 	c := f(z[:n], a.x, a.y)
 	for i, zi := range z[:n] {
 		if zi != a.z[i] {
@@ -415,7 +415,7 @@ var prod10VWW = []arg10VWW{
 }
 
 func testFun10VWW(t *testing.T, msg string, f fun10VWW, a arg10VWW) {
-	z := make(nat, len(a.z))
+	z := make(dec, len(a.z))
 	c := f(z, a.x, a.y, a.r)
 	for i, zi := range z {
 		if zi != a.z[i] {
@@ -431,85 +431,89 @@ func testFun10VWW(t *testing.T, msg string, f fun10VWW, a arg10VWW) {
 func TestDecFun10VWW(t *testing.T) {
 	for _, a := range prod10VWW {
 		arg := a
-		testFun10VWW(t, "mulAddVWW_g", mulAdd10VWW_g, arg)
-		testFun10VWW(t, "mulAddVWW", mulAdd10VWW, arg)
+		testFun10VWW(t, "mulAdd10VWW_g", mulAdd10VWW_g, arg)
+		testFun10VWW(t, "mulAdd10VWW", mulAdd10VWW, arg)
 
 		if a.y != 0 && a.r < a.y {
 			arg := arg10VWW{a.x, a.z, a.y, a.c, a.r}
-			testFun10VWW(t, "divWVW_g", div10VWW_g, arg)
-			testFun10VWW(t, "divWVW", div10VWW, arg)
+			testFun10VWW(t, "div10VWW_g", div10VWW_g, arg)
+			testFun10VWW(t, "div10VWW", div10VWW, arg)
 		}
 	}
 }
 
-// var mulWWTests = []struct {
-// 	x, y Word
-// 	q, r Word
-// }{
-// 	{_M, _M, _M - 1, 1},
-// 	// 32 bit only: {0xc47dfa8c, 50911, 0x98a4, 0x998587f4},
-// }
+var mul10WWTests = []struct {
+	x, y Word
+	q, r Word
+}{
+	{_DMax, _DMax, _DMax - 1, 1},
+	// 32 bit only: {0xc47dfa8c, 50911, 0x98a4, 0x998587f4},
+}
 
-// func TestMulWW(t *testing.T) {
-// 	for i, test := range mulWWTests {
-// 		q, r := mulWW_g(test.x, test.y)
-// 		if q != test.q || r != test.r {
-// 			t.Errorf("#%d got (%x, %x) want (%x, %x)", i, q, r, test.q, test.r)
-// 		}
-// 	}
-// }
+func TestDecMul10WW(t *testing.T) {
+	for i, test := range mul10WWTests {
+		q, r := mul10WW_g(test.x, test.y)
+		if q != test.q || r != test.r {
+			t.Errorf("#%d mul10WW_g got (%x, %x) want (%x, %x)", i, q, r, test.q, test.r)
+		}
+		q, r = mul10WW(test.x, test.y)
+		if q != test.q || r != test.r {
+			t.Errorf("#%d mul10WW got (%x, %x) want (%x, %x)", i, q, r, test.q, test.r)
+		}
+	}
+}
 
-// var mulAddWWWTests = []struct {
-// 	x, y, c Word
-// 	q, r    Word
-// }{
-// 	// TODO(db47h): These will only work on 64-bit platforms.
-// 	// {15064310297182388543, 0xe7df04d2d35d5d80, 13537600649892366549, 13644450054494335067, 10832252001440893781},
-// 	// {15064310297182388543, 0xdab2f18048baa68d, 13644450054494335067, 12869334219691522700, 14233854684711418382},
-// 	{_M, _M, 0, _M - 1, 1},
-// 	{_M, _M, _M, _M, 0},
-// }
+var mulAdd10WWWTests = []struct {
+	x, y, c Word
+	q, r    Word
+}{
+	// TODO(db47h): These will only work on 64-bit platforms.
+	// {15064310297182388543, 0xe7df04d2d35d5d80, 13537600649892366549, 13644450054494335067, 10832252001440893781},
+	// {15064310297182388543, 0xdab2f18048baa68d, 13644450054494335067, 12869334219691522700, 14233854684711418382},
+	{_DMax, _DMax, 0, _DMax - 1, 1},
+	{_DMax, _DMax, _DMax, _DMax, 0},
+}
 
-// func TestMulAddWWW(t *testing.T) {
-// 	for i, test := range mulAddWWWTests {
-// 		q, r := mulAddWWW_g(test.x, test.y, test.c)
-// 		if q != test.q || r != test.r {
-// 			t.Errorf("#%d got (%x, %x) want (%x, %x)", i, q, r, test.q, test.r)
-// 		}
-// 	}
-// }
+func TestDecMulAdd10WWW(t *testing.T) {
+	for i, test := range mulAdd10WWWTests {
+		q, r := mulAdd10WWW_g(test.x, test.y, test.c)
+		if q != test.q || r != test.r {
+			t.Errorf("#%d got (%x, %x) want (%x, %x)", i, q, r, test.q, test.r)
+		}
+	}
+}
 
-// func BenchmarkMulAddVWW(b *testing.B) {
-// 	for _, n := range benchSizes {
-// 		if isRaceBuilder && n > 1e3 {
-// 			continue
-// 		}
-// 		z := make([]Word, n+1)
-// 		x := rndV(n)
-// 		y := rndW()
-// 		r := rndW()
-// 		b.Run(fmt.Sprint(n), func(b *testing.B) {
-// 			b.SetBytes(int64(n * _W))
-// 			for i := 0; i < b.N; i++ {
-// 				mulAddVWW(z, x, y, r)
-// 			}
-// 		})
-// 	}
-// }
+func BenchmarkMulAdd10VWW(b *testing.B) {
+	for _, n := range benchSizes {
+		if isRaceBuilder && n > 1e3 {
+			continue
+		}
+		z := make([]Word, n+1)
+		x := rnd10V(n)
+		y := rnd10W()
+		r := rnd10W()
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			b.SetBytes(int64(n * _W))
+			for i := 0; i < b.N; i++ {
+				mulAdd10VWW(z, x, y, r)
+			}
+		})
+	}
+}
 
-// func BenchmarkAddMulVVW(b *testing.B) {
-// 	for _, n := range benchSizes {
-// 		if isRaceBuilder && n > 1e3 {
-// 			continue
-// 		}
-// 		x := rndV(n)
-// 		y := rndW()
-// 		z := make([]Word, n)
-// 		b.Run(fmt.Sprint(n), func(b *testing.B) {
-// 			b.SetBytes(int64(n * _W))
-// 			for i := 0; i < b.N; i++ {
-// 				addMulVVW(z, x, y)
-// 			}
-// 		})
-// 	}
-// }
+func BenchmarkAddMul10VVW(b *testing.B) {
+	for _, n := range benchSizes {
+		if isRaceBuilder && n > 1e3 {
+			continue
+		}
+		x := rnd10V(n)
+		y := rnd10W()
+		z := make([]Word, n)
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			b.SetBytes(int64(n * _W))
+			for i := 0; i < b.N; i++ {
+				addMul10VVW(z, x, y)
+			}
+		})
+	}
+}

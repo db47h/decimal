@@ -848,9 +848,8 @@ func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
 func BenchmarkDecimalDiv(b *testing.B) {
 	sizes := []int{
 		10, 20, 50, 100, 200, 500, 1000,
-		1e4,
-		// TODO(db47h): enable these after optimizing
-		// 1e5, 1e6, 1e7,
+		1e4, 1e5, 1e6, 1e7,
+		//		TODO(db47h): enable these after optimizing
 	}
 	for _, i := range sizes {
 		j := 2 * i
@@ -859,15 +858,3 @@ func BenchmarkDecimalDiv(b *testing.B) {
 		})
 	}
 }
-
-// func TestMPRIME(t *testing.T) {
-// 	const (
-// 		N     = _W
-// 		d     = _DB
-// 		l     = _DWb
-// 		mP    = (1<<(N+l)-1)/d - 1<<N // m'
-// 		dNorm = d << (N - l)
-// 	)
-// 	m := uint64(mP)
-// 	t.Logf("%d %#x", uint64(m), uint64(m))
-// }

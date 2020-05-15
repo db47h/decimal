@@ -268,7 +268,7 @@ func (z dec) divW(x dec, y Word) (q dec, r Word) {
 	}
 	// m > 0
 	z = z.make(m)
-	r = div10WVW(z, 0, x, y)
+	r = div10VWW(z, x, y, 0)
 	q = z.norm()
 	return
 }

@@ -42,8 +42,8 @@ func addMul10VVW(z, x []Word, y Word) (c Word) {
 	return addMul10VVW_g(z, x, y)
 }
 
-func div10WVW(z []Word, xn Word, x []Word, y Word) (r Word) {
-	return div10WVW_g(z, xn, x, y)
+func div10VWW(z, x []Word, y, xn Word) (r Word) {
+	return div10VWW_g(z, x, y, xn)
 }
 
 func div10W(n1, n0 Word) (q, r Word) {

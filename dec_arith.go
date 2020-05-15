@@ -282,7 +282,7 @@ func addMul10VVW_g(z, x []Word, y Word) (c Word) {
 	return
 }
 
-func div10WVW_g(z []Word, xn Word, x []Word, y Word) (r Word) {
+func div10VWW_g(z, x []Word, y, xn Word) (r Word) {
 	r = xn
 	for i := len(z) - 1; i >= 0; i-- {
 		// z[i], r = div10WW(r, x[i], y)
@@ -324,7 +324,7 @@ func div10W_g(n1, n0 Word) (q, r Word) {
 	}
 
 	// if N == 64, N == l => n2 == n1 && n10 == n0
-	// go vet complains, but this should be optimized out.
+	// go vet complains, but this is optimized out.
 	n2 := n1<<(N-l) + n0>>l
 	n10 := n0 << (N - l)
 	// -n1 = (n10 < 0 ? -1 : 0)

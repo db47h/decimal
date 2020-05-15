@@ -295,7 +295,6 @@ TEXT ·add10VW(SB),NOSPLIT,$0
 	ADDQ $1, SI		// i++
 
 	// z[1:] ...
-
 	// We do not check the carry value to switch to a memcpy for small slices
 	// (len < 4). This seems to be a good trade-off to the cost of additional
 	// jumps/function calls.

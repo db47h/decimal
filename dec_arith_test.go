@@ -430,9 +430,6 @@ func BenchmarkSub10VW(b *testing.B) {
 // 	}
 // }
 
-// // TODO(db47h) mulAddVWW and divWVW are symmetric operations but
-// //           their signature is not symmetric. Try to unify.
-
 // type funWVW func(z []Word, xn Word, x []Word, y Word) (r Word)
 // type argWVW struct {
 // 	z  nat

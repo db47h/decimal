@@ -110,16 +110,33 @@ func (z dec) setUint64(x uint64) (dec, int32) {
 	return z, dig
 }
 
-func (x dec) toNat(z []Word) []Word {
+func makeNat(z []big.Word, n int) []big.Word {
+	if n <= cap(z) {
+		return z[:n] // reuse z
+	}
+	if n == 1 {
+		// Most decs start small and stay that way; don't over-allocate.
+		return make([]big.Word, 1)
+	}
+	// Choosing a good value for e has significant performance impact
+	// because it increases the chance that a value can be reused.
+	const e = 4 // extra capacity
+	return make([]big.Word, n, n+e)
+}
+
+func decToNat(z []big.Word, x dec) []big.Word {
 	if len(x) == 0 {
-		return dec(z)[:0]
+		return z[:0]
 	}
 	if len(x) == 1 {
-		return dec(z).setWord(x[0])
+		z = makeNat(z, 1)
+		z[0] = big.Word(x[0])
+		return z
 	}
 	// bits = x.digits() * Log10 / Log2  + 1
 	// words = (bits + _W - 1)/_W
-	z = dec(z).make((int(float64(x.digits())*log2_10) + _W) / _W)
+	z = makeNat(z, (int(float64(x.digits())*log2_10)+_W)/_W)
+
 	zz := dec(nil).set(x)
 	for i := 0; i < len(z); i++ {
 		// r = zz & _B; zz = zz >> _W
@@ -128,19 +145,22 @@ func (x dec) toNat(z []Word) []Word {
 			zz[j], r = mulAddWWW_g(r, _DB, zz[j])
 		}
 		zz = zz.norm()
-		z[i] = r
+		z[i] = big.Word(r)
 	}
-	return dec(z).norm()
+	// normalize
+	i := len(z)
+	for i > 0 && z[i-1] == 0 {
+		i--
+	}
+	return z[0:i]
 }
 
-// setInt sets z = x.mant
-func (z dec) setInt(x *big.Int) dec {
-	bb := x.Bits()
-	// TODO(db47h): here we cannot directly copy(b, bb)
-	// because big.Word != decimal.Word.
-	b := make([]Word, len(bb))
-	for i := 0; i < len(b) && i < len(bb); i++ {
-		b[i] = Word(bb[i])
+// setNat sets z = x.mant
+func (z dec) setNat(x []big.Word) dec {
+	// here we cannot directly copy(b, bb) because big.Word != decimal.Word.
+	b := make([]Word, len(x))
+	for i := 0; i < len(b) && i < len(x); i++ {
+		b[i] = Word(x[i])
 	}
 	for i := 0; i < len(z); i++ {
 		z[i] = divWVW(b, 0, b, _DB)
@@ -759,10 +779,11 @@ func (z dec) expNN(x, y, m dec) dec {
 	// }
 
 	// convert y from dec to base2 nat
-	yy := y.toNat(make([]Word, 1))
+	// TODO(db47h): this is a quick hack to get expNN working.
+	yy := decToNat(make([]big.Word, 1), y)
 
 	v := yy[len(yy)-1] // v > 0 because yy is normalized and y > 0
-	shift := nlz(v) + 1
+	shift := nlz(Word(v)) + 1
 	v <<= shift
 
 	// zz and r are used to avoid allocating in mul and div as

@@ -16,6 +16,11 @@ import (
 // the precision of IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
 
+var decimalZero Decimal
+
+var _ fmt.Scanner = &decimalZero   // *Decimal must implement fmt.Scanner
+var _ fmt.Formatter = &decimalZero // *Float must implement fmt.Formatter
+
 type Decimal struct {
 	mant dec
 	exp  int32
@@ -26,8 +31,14 @@ type Decimal struct {
 	neg  bool
 }
 
+// NewDecimal allocates and returns a new Float set to x,
+// with precision DefaultDecimalPrec and rounding mode ToNearestEven.
+// NewDecimal panics with ErrNaN if x is a NaN.
 func NewDecimal(x float64) *Decimal {
-	panic("not implemented")
+	if math.IsNaN(x) {
+		panic(ErrNaN{"NewFloat(NaN)"})
+	}
+	return new(Decimal).SetFloat64(x)
 }
 
 func (z *Decimal) Abs(x *Decimal) *Decimal {
@@ -39,20 +50,374 @@ func (x *Decimal) Acc() Accuracy {
 	return x.acc
 }
 
+// Handling of sign bit as defined by IEEE 754-2008, section 6.3:
+//
+// When neither the inputs nor result are NaN, the sign of a product or
+// quotient is the exclusive OR of the operands’ signs; the sign of a sum,
+// or of a difference x−y regarded as a sum x+(−y), differs from at most
+// one of the addends’ signs; and the sign of the result of conversions,
+// the quantize operation, the roundToIntegral operations, and the
+// roundToIntegralExact (see 5.3.1) is the sign of the first or only operand.
+// These rules shall apply even when operands or results are zero or infinite.
+//
+// When the sum of two operands with opposite signs (or the difference of
+// two operands with like signs) is exactly zero, the sign of that sum (or
+// difference) shall be +0 in all rounding-direction attributes except
+// roundTowardNegative; under that attribute, the sign of an exact zero
+// sum (or difference) shall be −0. However, x+x = x−(−x) retains the same
+// sign as x even when x is zero.
+//
+// See also: https://play.golang.org/p/RtH3UCt5IH
+
+// Add sets z to the rounded sum x+y and returns z. If z's precision is 0,
+// it is changed to the larger of x's or y's precision before the operation.
+// Rounding is performed according to z's precision and rounding mode; and
+// z's accuracy reports the result error relative to the exact (not rounded)
+// result. Add panics with ErrNaN if x and y are infinities with opposite
+// signs. The value of z is undefined in that case.
 func (z *Decimal) Add(x, y *Decimal) *Decimal {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
+
+	if z.prec == 0 {
+		z.prec = umax32(x.prec, y.prec)
+	}
+
+	if x.form == finite && y.form == finite {
+		// x + y (common case)
+
+		// Below we set z.neg = x.neg, and when z aliases y this will
+		// change the y operand's sign. This is fine, because if an
+		// operand aliases the receiver it'll be overwritten, but we still
+		// want the original x.neg and y.neg values when we evaluate
+		// x.neg != y.neg, so we need to save y.neg before setting z.neg.
+		yneg := y.neg
+
+		z.neg = x.neg
+		if x.neg == yneg {
+			// x + y == x + y
+			// (-x) + (-y) == -(x + y)
+			z.uadd(x, y)
+		} else {
+			// x + (-y) == x - y == -(y - x)
+			// (-x) + y == y - x == -(x - y)
+			if x.ucmp(y) > 0 {
+				z.usub(x, y)
+			} else {
+				z.neg = !z.neg
+				z.usub(y, x)
+			}
+		}
+		if z.form == zero && z.mode == ToNegativeInf && z.acc == Exact {
+			z.neg = true
+		}
+		return z
+	}
+
+	if x.form == inf && y.form == inf && x.neg != y.neg {
+		// +Inf + -Inf
+		// -Inf + +Inf
+		// value of z is undefined but make sure it's valid
+		z.acc = Exact
+		z.form = zero
+		z.neg = false
+		panic(ErrNaN{"addition of infinities with opposite signs"})
+	}
+
+	if x.form == zero && y.form == zero {
+		// ±0 + ±0
+		z.acc = Exact
+		z.form = zero
+		z.neg = x.neg && y.neg // -0 + -0 == -0
+		return z
+	}
+
+	if x.form == inf || y.form == zero {
+		// ±Inf + y
+		// x + ±0
+		return z.Set(x)
+	}
+
+	// ±0 + y
+	// x + ±Inf
+	return z.Set(y)
 }
 
-func (x *Decimal) Append(buf []byte, fmt byte, prec int) []byte {
-	panic("not implemented")
+// z = x + y, ignoring signs of x and y for the addition
+// but using the sign of z for rounding the result.
+// x and y must have a non-empty mantissa and valid exponent.
+func (z *Decimal) uadd(x, y *Decimal) {
+	// Note: This implementation requires 2 shifts most of the
+	// time. It is also inefficient if exponents or precisions
+	// differ by wide margins. The following article describes
+	// an efficient (but much more complicated) implementation
+	// compatible with the internal representation used here:
+	//
+	// Vincent Lefèvre: "The Generic Multiple-Precision Floating-
+	// Point Addition With Exact Rounding (as in the MPFR Library)"
+	// http://www.vinc17.net/research/papers/rnc6.pdf
+
+	if debugDecimal {
+		validateBinaryOperands(x, y)
+	}
+
+	// compute exponents ex, ey for mantissa with decimal point
+	// on the right (mantissa.0) - use int64 to avoid overflow
+	ex := int64(x.exp) - int64(len(x.mant))*_DW
+	ey := int64(y.exp) - int64(len(y.mant))*_DW
+
+	al := alias(z.mant, x.mant) || alias(z.mant, y.mant)
+
+	// TODO(gri) having a combined add-and-shift primitive
+	//           could make this code significantly faster
+	switch {
+	case ex < ey:
+		if al {
+			t := dec(nil).shl(y.mant, uint(ey-ex))
+			z.mant = z.mant.add(x.mant, t)
+		} else {
+			z.mant = z.mant.shl(y.mant, uint(ey-ex))
+			z.mant = z.mant.add(x.mant, z.mant)
+		}
+	default:
+		// ex == ey, no shift needed
+		z.mant = z.mant.add(x.mant, y.mant)
+	case ex > ey:
+		if al {
+			t := dec(nil).shl(x.mant, uint(ex-ey))
+			z.mant = z.mant.add(t, y.mant)
+		} else {
+			z.mant = z.mant.shl(x.mant, uint(ex-ey))
+			z.mant = z.mant.add(z.mant, y.mant)
+		}
+		ex = ey
+	}
+	// len(z.mant) > 0
+
+	z.setExpAndRound(ex+int64(len(z.mant))*_DW-dnorm(z.mant), 0)
 }
 
+// z = x - y for |x| > |y|, ignoring signs of x and y for the subtraction
+// but using the sign of z for rounding the result.
+// x and y must have a non-empty mantissa and valid exponent.
+func (z *Decimal) usub(x, y *Decimal) {
+	// This code is symmetric to uadd.
+	// We have not factored the common code out because
+	// eventually uadd (and usub) should be optimized
+	// by special-casing, and the code will diverge.
+
+	if debugDecimal {
+		validateBinaryOperands(x, y)
+	}
+
+	ex := int64(x.exp) - int64(len(x.mant))*_DW
+	ey := int64(y.exp) - int64(len(y.mant))*_DW
+
+	al := alias(z.mant, x.mant) || alias(z.mant, y.mant)
+
+	switch {
+	case ex < ey:
+		if al {
+			t := dec(nil).shl(y.mant, uint(ey-ex))
+			z.mant = t.sub(x.mant, t)
+		} else {
+			z.mant = z.mant.shl(y.mant, uint(ey-ex))
+			z.mant = z.mant.sub(x.mant, z.mant)
+		}
+	default:
+		// ex == ey, no shift needed
+		z.mant = z.mant.sub(x.mant, y.mant)
+	case ex > ey:
+		if al {
+			t := dec(nil).shl(x.mant, uint(ex-ey))
+			z.mant = t.sub(t, y.mant)
+		} else {
+			z.mant = z.mant.shl(x.mant, uint(ex-ey))
+			z.mant = z.mant.sub(z.mant, y.mant)
+		}
+		ex = ey
+	}
+
+	// operands may have canceled each other out
+	if len(z.mant) == 0 {
+		z.acc = Exact
+		z.form = zero
+		z.neg = false
+		return
+	}
+	// len(z.mant) > 0
+
+	z.setExpAndRound(ex+int64(len(z.mant))*_DW-dnorm(z.mant), 0)
+}
+
+// Cmp compares x and y and returns:
+//
+//   -1 if x <  y
+//    0 if x == y (incl. -0 == 0, -Inf == -Inf, and +Inf == +Inf)
+//   +1 if x >  y
+//
 func (x *Decimal) Cmp(y *Decimal) int {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
+
+	mx := x.ord()
+	my := y.ord()
+	switch {
+	case mx < my:
+		return -1
+	case mx > my:
+		return +1
+	}
+	// mx == my
+
+	// only if |mx| == 1 we have to compare the mantissae
+	switch mx {
+	case -1:
+		return y.ucmp(x)
+	case +1:
+		return x.ucmp(y)
+	}
+
+	return 0
+}
+
+// ord classifies x and returns:
+//
+//	-2 if -Inf == x
+//	-1 if -Inf < x < 0
+//	 0 if x == 0 (signed or unsigned)
+//	+1 if 0 < x < +Inf
+//	+2 if x == +Inf
+//
+func (x *Decimal) ord() int {
+	var m int
+	switch x.form {
+	case finite:
+		m = 1
+	case zero:
+		return 0
+	case inf:
+		m = 2
+	}
+	if x.neg {
+		m = -m
+	}
+	return m
+}
+
+// ucmp returns -1, 0, or +1, depending on whether
+// |x| < |y|, |x| == |y|, or |x| > |y|.
+// x and y must have a non-empty mantissa and valid exponent.
+func (x *Decimal) ucmp(y *Decimal) int {
+	if debugDecimal {
+		validateBinaryOperands(x, y)
+	}
+
+	switch {
+	case x.exp < y.exp:
+		return -1
+	case x.exp > y.exp:
+		return +1
+	}
+	// x.exp == y.exp
+
+	// compare mantissas
+	i := len(x.mant)
+	j := len(y.mant)
+	for i > 0 || j > 0 {
+		var xm, ym Word
+		if i > 0 {
+			i--
+			xm = x.mant[i]
+		}
+		if j > 0 {
+			j--
+			ym = y.mant[j]
+		}
+		switch {
+		case xm < ym:
+			return -1
+		case xm > ym:
+			return +1
+		}
+	}
+
+	return 0
 }
 
 func (z *Decimal) Copy(x *Decimal) *Decimal {
 	panic("not implemented")
+}
+
+// Float returns the big.Float value nearest to x with precision prec and
+// RoundingMode set to that of x. The returned accuracy is the accuracy if the
+// conversion from base 10 to base 2.
+//
+// If prec is 0, the result precision will be set to the precision of x
+// (converting precision in decimal digits to bits).
+//
+// Note that for high enough exponents, the result might overflow and be set to
+// ±Inf. In this case, accuracy will be either Above or Below, depending on the
+// sign of x.
+func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
+	p := uint64(prec)
+	if p == 0 {
+		p = uint64(float64(x.prec)*log2_10) + 1
+		if p < 64 {
+			p = 64
+		}
+	}
+	if p > MaxPrec {
+		p = MaxPrec
+	}
+
+	z := new(big.Float).SetMode(big.RoundingMode(x.mode)).SetPrec(uint(p))
+
+	switch x.form {
+	case zero:
+		return z, Exact
+	case inf:
+		return z.SetInf(x.neg), Exact
+	}
+
+	// big.Float has no SetBits. Need to use a temp Int.
+	var i big.Int
+	i.SetBits(decToNat(nil, x.mant))
+
+	exp := int64(x.exp) - int64(len(x.mant)*_DW)
+	if exp < MinExp {
+		// overflow.
+		return z, makeAcc(x.neg)
+	}
+
+	z = z.SetInt(&i)
+
+	// z = x.mant * 2**exp * 5**exp
+	// Set 2 exponent
+	z.SetMantExp(z, int(exp))
+
+	// now multiply/divide by 5**exp
+	// add a full Word of precision for exponent conversion
+	tp := ((p+_W-1)/_W + 1) * _W
+	if tp > MaxPrec {
+		tp = MaxPrec
+	}
+	// TODO(db47h): Is the default ToNearestEven correct for t?
+	t := new(big.Float).SetPrec(uint(tp))
+	if exp < 0 {
+		z.Quo(z, pow5Float(t, uint64(-exp)))
+	} else {
+		z.Mul(z, pow5Float(t, uint64(exp)))
+	}
+	if z.IsInf() {
+		// inaccurate result
+		return z, makeAcc(!x.neg)
+	}
+	return z, Accuracy(z.Acc())
 }
 
 func (x *Decimal) Float32() (float32, Accuracy) {
@@ -187,8 +552,94 @@ func (x *Decimal) Prec() uint {
 	return uint(x.prec)
 }
 
+// Quo sets z to the rounded quotient x/y and returns z.
+// Precision, rounding, and accuracy reporting are as for Add.
+// Quo panics with ErrNaN if both operands are zero or infinities.
+// The value of z is undefined in that case.
 func (z *Decimal) Quo(x, y *Decimal) *Decimal {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
+
+	if z.prec == 0 {
+		z.prec = umax32(x.prec, y.prec)
+	}
+
+	z.neg = x.neg != y.neg
+
+	if x.form == finite && y.form == finite {
+		// x / y (common case)
+		z.uquo(x, y)
+		return z
+	}
+
+	z.acc = Exact
+	if x.form == zero && y.form == zero || x.form == inf && y.form == inf {
+		// ±0 / ±0
+		// ±Inf / ±Inf
+		// value of z is undefined but make sure it's valid
+		z.form = zero
+		z.neg = false
+		panic(ErrNaN{"division of zero by zero or infinity by infinity"})
+	}
+
+	if x.form == zero || y.form == inf {
+		// ±0 / y
+		// x / ±Inf
+		z.form = zero
+		return z
+	}
+
+	// x / ±0
+	// ±Inf / y
+	z.form = inf
+	return z
+}
+
+// z = x / y, ignoring signs of x and y for the division
+// but using the sign of z for rounding the result.
+// x and y must have a non-empty mantissa and valid exponent.
+func (z *Decimal) uquo(x, y *Decimal) {
+	if debugDecimal {
+		validateBinaryOperands(x, y)
+	}
+
+	// mantissa length in words for desired result precision + 1
+	// (at least one extra bit so we get the rounding bit after
+	// the division)
+	n := int(z.prec/_DW) + 1
+
+	// compute adjusted x.mant such that we get enough result precision
+	xadj := x.mant
+	if d := n - len(x.mant) + len(y.mant); d > 0 {
+		// d extra words needed => add d "0 digits" to x
+		xadj = make(dec, len(x.mant)+d)
+		copy(xadj[d:], x.mant)
+	}
+	// TODO(db47h): If we have too many digits (d < 0), we should be able
+	// to shorten x for faster division. But we must be extra careful
+	// with rounding in that case.
+
+	// Compute d before division since there may be aliasing of x.mant
+	// (via xadj) or y.mant with z.mant.
+	d := len(xadj) - len(y.mant)
+
+	// divide
+	var r dec
+	z.mant, r = z.mant.div(nil, xadj, y.mant)
+	e := int64(x.exp) - int64(y.exp) - int64(d-len(z.mant))*_DW
+
+	// The result is long enough to include (at least) the rounding bit.
+	// If there's a non-zero remainder, the corresponding fractional part
+	// (if it were computed), would have a non-zero sticky bit (if it were
+	// zero, it couldn't have a non-zero remainder).
+	var sbit uint
+	if len(r) > 0 {
+		sbit = 1
+	}
+
+	z.setExpAndRound(e-dnorm(z.mant), sbit)
 }
 
 func (x *Decimal) Rat(z *big.Rat) (*big.Rat, Accuracy) {
@@ -258,7 +709,7 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 		return z
 	}
 	// x != 0
-	z.mant = z.mant.make((int(prec) + _DW - 1) / _DW).setInt(x)
+	z.mant = z.mant.make((int(prec) + _DW - 1) / _DW).setNat(x.Bits())
 	exp := dnorm(z.mant)
 	z.setExpAndRound(int64(len(z.mant))*_DW-exp, 0)
 	return z
@@ -400,16 +851,71 @@ func (z *Decimal) Sqrt(x *Decimal) *Decimal {
 	panic("not implemented")
 }
 
-func (x *Decimal) String() string {
-	panic("not implemented")
-}
-
+// Sub sets z to the rounded difference x-y and returns z.
+// Precision, rounding, and accuracy reporting are as for Add.
+// Sub panics with ErrNaN if x and y are infinities with equal
+// signs. The value of z is undefined in that case.
 func (z *Decimal) Sub(x, y *Decimal) *Decimal {
-	panic("not implemented")
-}
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
 
-func (x *Decimal) Text(format byte, prec int) string {
-	panic("not implemented")
+	if z.prec == 0 {
+		z.prec = umax32(x.prec, y.prec)
+	}
+
+	if x.form == finite && y.form == finite {
+		// x - y (common case)
+		yneg := y.neg
+		z.neg = x.neg
+		if x.neg != yneg {
+			// x - (-y) == x + y
+			// (-x) - y == -(x + y)
+			z.uadd(x, y)
+		} else {
+			// x - y == x - y == -(y - x)
+			// (-x) - (-y) == y - x == -(x - y)
+			if x.ucmp(y) > 0 {
+				z.usub(x, y)
+			} else {
+				z.neg = !z.neg
+				z.usub(y, x)
+			}
+		}
+		if z.form == zero && z.mode == ToNegativeInf && z.acc == Exact {
+			z.neg = true
+		}
+		return z
+	}
+
+	if x.form == inf && y.form == inf && x.neg == y.neg {
+		// +Inf - +Inf
+		// -Inf - -Inf
+		// value of z is undefined but make sure it's valid
+		z.acc = Exact
+		z.form = zero
+		z.neg = false
+		panic(ErrNaN{"subtraction of infinities with equal signs"})
+	}
+
+	if x.form == zero && y.form == zero {
+		// ±0 - ±0
+		z.acc = Exact
+		z.form = zero
+		z.neg = x.neg && !y.neg // -0 - +0 == -0
+		return z
+	}
+
+	if x.form == inf || y.form == zero {
+		// ±Inf - y
+		// x - ±0
+		return z.Set(x)
+	}
+
+	// ±0 - y
+	// x - ±Inf
+	return z.Neg(y)
 }
 
 func (x *Decimal) Uint64() (uint64, Accuracy) {

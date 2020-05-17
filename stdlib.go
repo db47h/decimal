@@ -365,3 +365,17 @@ func writeMultiple(s fmt.State, text string, count int) {
 		}
 	}
 }
+
+func makeNat(z []big.Word, n int) []big.Word {
+	if n <= cap(z) {
+		return z[:n] // reuse z
+	}
+	if n == 1 {
+		// Most decs start small and stay that way; don't over-allocate.
+		return make([]big.Word, 1)
+	}
+	// Choosing a good value for e has significant performance impact
+	// because it increases the chance that a value can be reused.
+	const e = 4 // extra capacity
+	return make([]big.Word, n, n+e)
+}

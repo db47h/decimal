@@ -41,8 +41,12 @@ func NewDecimal(x float64) *Decimal {
 	return new(Decimal).SetFloat64(x)
 }
 
+// Abs sets z to the (possibly rounded) value |x| (the absolute value of x)
+// and returns z.
 func (z *Decimal) Abs(x *Decimal) *Decimal {
-	panic("not implemented")
+	z.Set(x)
+	z.neg = false
+	return z
 }
 
 // Acc returns the accuracy of x produced by the most recent operation.
@@ -436,12 +440,38 @@ func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
 	return z, Accuracy(z.Acc())
 }
 
+// Float32 returns the float32 value nearest to x. If x is too small to be
+// represented by a float32 (|x| < math.SmallestNonzeroFloat32), the result
+// is (0, Below) or (-0, Above), respectively, depending on the sign of x.
+// If x is too large to be represented by a float32 (|x| > math.MaxFloat32),
+// the result is (+Inf, Above) or (-Inf, Below), depending on the sign of x.
 func (x *Decimal) Float32() (float32, Accuracy) {
-	panic("not implemented")
+	z, da := x.Float(32)
+	f, fa := z.Float32()
+	// If big.Float -> float64 conversion is accurate, use Decimal->Float
+	// instead. The accuracy is correct as long as the Decimal -> big.Float
+	// conversion happens with a precision higher than 24.
+	if fa == big.Exact {
+		fa = big.Accuracy(da)
+	}
+	return f, Accuracy(fa)
 }
 
+// Float64 returns the float64 value nearest to x. If x is too small to be
+// represented by a float64 (|x| < math.SmallestNonzeroFloat64), the result
+// is (0, Below) or (-0, Above), respectively, depending on the sign of x.
+// If x is too large to be represented by a float64 (|x| > math.MaxFloat64),
+// the result is (+Inf, Above) or (-Inf, Below), depending on the sign of x.
 func (x *Decimal) Float64() (float64, Accuracy) {
-	panic("not implemented")
+	z, da := x.Float(64)
+	f, fa := z.Float64()
+	// If big.Float -> float64 conversion is accurate, use Decimal->Float
+	// instead. The accuracy is correct as long as the Decimal -> big.Float
+	// conversion happens with a precision higher than 53.
+	if fa == big.Exact {
+		fa = big.Accuracy(da)
+	}
+	return f, Accuracy(fa)
 }
 
 func (z *Decimal) GobDecode(buf []byte) error {
@@ -452,8 +482,59 @@ func (x *Decimal) GobEncode() ([]byte, error) {
 	panic("not implemented")
 }
 
+// Int returns the result of truncating x towards zero; or nil if x is an
+// infinity.
+// The result is Exact if x.IsInt(); otherwise it is Below for x > 0, and Above
+// for x < 0.
+// If a non-nil *Int argument z is provided, Int stores the result in z instead
+// of allocating a new Int.
 func (x *Decimal) Int(z *big.Int) (*big.Int, Accuracy) {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+
+	if z == nil && x.form <= finite {
+		z = new(big.Int)
+	}
+
+	switch x.form {
+	case finite:
+		// 0 < |x| < +Inf
+		acc := makeAcc(x.neg)
+		if x.exp <= 0 {
+			// 0 < |x| < 1
+			return z.SetInt64(0), acc
+		}
+		// x.exp > 0
+
+		// 1 <= |x| < +Inf
+		// determine minimum required precision for x
+		allDigits := uint(len(x.mant)) * _DW
+		exp := uint(x.exp)
+		if x.MinPrec() <= exp {
+			acc = Exact
+		}
+		// shift mantissa as needed
+		var t dec
+		switch {
+		case exp > allDigits:
+			t = t.shl(x.mant, exp-allDigits)
+		default:
+			t = t.set(x.mant)
+		case exp < allDigits:
+			t = t.shr(x.mant, allDigits-exp)
+		}
+		z.SetBits(decToNat(z.Bits(), t))
+		return z, acc
+
+	case zero:
+		return z.SetInt64(0), Exact
+
+	case inf:
+		return nil, makeAcc(x.neg)
+	}
+
+	panic("unreachable")
 }
 
 func (x *Decimal) Int64() (int64, Accuracy) {

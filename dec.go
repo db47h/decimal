@@ -133,7 +133,7 @@ func decToNat(z []big.Word, x dec) []big.Word {
 		z[0] = big.Word(x[0])
 		return z
 	}
-	// bits = x.digits() * Log10 / Log2  + 1
+	// bits = x.digits() * Log(10) / Log(2)  + 1
 	// words = (bits + _W - 1)/_W
 	z = makeNat(z, (int(float64(x.digits())*log2_10)+_W)/_W)
 

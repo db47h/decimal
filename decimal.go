@@ -349,8 +349,25 @@ func (x *Decimal) ucmp(y *Decimal) int {
 	return 0
 }
 
+// Copy sets z to x, with the same precision, rounding mode, and
+// accuracy as x, and returns z. x is not changed even if z and
+// x are the same.
 func (z *Decimal) Copy(x *Decimal) *Decimal {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+	if z != x {
+		z.prec = x.prec
+		z.mode = x.mode
+		z.acc = x.acc
+		z.form = x.form
+		z.neg = x.neg
+		if z.form == finite {
+			z.mant = z.mant.set(x.mant)
+			z.exp = x.exp
+		}
+	}
+	return z
 }
 
 // Float returns the big.Float value nearest to x with precision prec and

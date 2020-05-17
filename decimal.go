@@ -423,7 +423,6 @@ func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
 	if tp > MaxPrec {
 		tp = MaxPrec
 	}
-	// TODO(db47h): Is the default ToNearestEven correct for t?
 	t := new(big.Float).SetPrec(uint(tp))
 	if exp < 0 {
 		z.Quo(z, pow5Float(t, uint64(-exp)))
@@ -442,10 +441,6 @@ func (x *Decimal) Float32() (float32, Accuracy) {
 }
 
 func (x *Decimal) Float64() (float64, Accuracy) {
-	panic("not implemented")
-}
-
-func (x *Decimal) Format(s fmt.State, format rune) {
 	panic("not implemented")
 }
 
@@ -956,7 +951,7 @@ func (x *Decimal) validate() {
 		panic("nonzero finite number with empty mantissa")
 	}
 	if msw := x.mant[m-1]; !(_DB/10 <= msw && msw < _DB) {
-		panic(fmt.Sprintf("last word of %s is not within [%d %d)", x.Text('e', 0), uint(_DB/10), uint(_DB)))
+		panic(fmt.Sprintf("last word of %s is not within [%d %d)", x.Text('p', 0), uint(_DB/10), uint(_DB)))
 	}
 	if x.prec == 0 {
 		panic("zero precision finite number")

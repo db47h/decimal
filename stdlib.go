@@ -355,3 +355,13 @@ func min(x, y int) int {
 	}
 	return y
 }
+
+// write count copies of text to s
+func writeMultiple(s fmt.State, text string, count int) {
+	if len(text) > 0 {
+		b := []byte(text)
+		for ; count > 0; count-- {
+			s.Write(b)
+		}
+	}
+}

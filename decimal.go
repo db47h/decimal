@@ -18,8 +18,10 @@ const DefaultDecimalPrec = 34
 
 var decimalZero Decimal
 
-var _ fmt.Scanner = &decimalZero   // *Decimal must implement fmt.Scanner
-var _ fmt.Formatter = &decimalZero // *Float must implement fmt.Formatter
+var (
+	_ fmt.Scanner   = &decimalZero // *Decimal must implement fmt.Scanner
+	_ fmt.Formatter = &decimalZero // *Float must implement fmt.Formatter
+)
 
 type Decimal struct {
 	mant dec
@@ -448,9 +450,7 @@ func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
 func (x *Decimal) Float32() (float32, Accuracy) {
 	z, da := x.Float(32)
 	f, fa := z.Float32()
-	// If big.Float -> float64 conversion is accurate, use Decimal->Float
-	// instead. The accuracy is correct as long as the Decimal -> big.Float
-	// conversion happens with a precision higher than 24.
+	// If big.Float -> float64 conversion is accurate, use Decimal->Float accuracy.
 	if fa == big.Exact {
 		fa = big.Accuracy(da)
 	}
@@ -465,9 +465,7 @@ func (x *Decimal) Float32() (float32, Accuracy) {
 func (x *Decimal) Float64() (float64, Accuracy) {
 	z, da := x.Float(64)
 	f, fa := z.Float64()
-	// If big.Float -> float64 conversion is accurate, use Decimal->Float
-	// instead. The accuracy is correct as long as the Decimal -> big.Float
-	// conversion happens with a precision higher than 53.
+	// If big.Float -> float64 conversion is accurate, use Decimal->Float accuracy.
 	if fa == big.Exact {
 		fa = big.Accuracy(da)
 	}
@@ -508,23 +506,12 @@ func (x *Decimal) Int(z *big.Int) (*big.Int, Accuracy) {
 		// x.exp > 0
 
 		// 1 <= |x| < +Inf
-		// determine minimum required precision for x
-		allDigits := uint(len(x.mant)) * _DW
-		exp := uint(x.exp)
-		if x.MinPrec() <= exp {
+		if x.MinPrec() <= uint(x.exp) {
 			acc = Exact
 		}
-		// shift mantissa as needed
-		var t dec
-		switch {
-		case exp > allDigits:
-			t = t.shl(x.mant, exp-allDigits)
-		default:
-			t = t.set(x.mant)
-		case exp < allDigits:
-			t = t.shr(x.mant, allDigits-exp)
-		}
-		z.SetBits(decToNat(z.Bits(), t))
+		// TODO(db47h): decToNat incurs a copy of its x parameter.
+		// here we do not care about trashing it.
+		z.SetBits(decToNat(z.Bits(), x.intMant()))
 		return z, acc
 
 	case zero:
@@ -537,8 +524,78 @@ func (x *Decimal) Int(z *big.Int) (*big.Int, Accuracy) {
 	panic("unreachable")
 }
 
+// intMant returns the de-normalized integer part of x's mantissa (least significant digit in z[0]).
+func (x *Decimal) intMant() dec {
+	// determine minimum required precision for x
+	allDigits := uint(len(x.mant)) * _DW
+	exp := uint(x.exp)
+	// shift mantissa as needed
+	var z dec
+	switch {
+	case exp > allDigits:
+		z = z.shl(x.mant, exp-allDigits)
+	default:
+		z = z.set(x.mant)
+	case exp < allDigits:
+		z = z.shr(x.mant, allDigits-exp)
+	}
+	return z
+}
+
+// Int64 returns the integer resulting from truncating x towards zero.
+// If math.MinInt64 <= x <= math.MaxInt64, the result is Exact if x is
+// an integer, and Above (x < 0) or Below (x > 0) otherwise.
+// The result is (math.MinInt64, Above) for x < math.MinInt64,
+// and (math.MaxInt64, Below) for x > math.MaxInt64.
 func (x *Decimal) Int64() (int64, Accuracy) {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+
+	switch x.form {
+	case finite:
+		// 0 < |x| < +Inf
+		acc := makeAcc(x.neg)
+		if x.exp <= 0 {
+			// 0 < |x| < 1
+			return 0, acc
+		}
+		// x.exp > 0
+
+		// 1 <= |x| < +Inf
+		if x.exp <= 20 {
+			// get low 64 bits of t
+			if t, ok := x.intMant().toUint64(); ok {
+				i := int64(t)
+				if x.neg {
+					i = -i
+				}
+				if x.MinPrec() <= uint(x.exp) {
+					acc = Exact // not truncated
+				}
+				// 0 <= |x| < 1<<63 or x = math.MinInt64
+				if t&(1<<63) == 0 || (x.neg && t == 1<<63) {
+					return i, acc
+				}
+			}
+		}
+		// x too large
+		if x.neg {
+			return math.MinInt64, Above
+		}
+		return math.MaxInt64, Below
+
+	case zero:
+		return 0, Exact
+
+	case inf:
+		if x.neg {
+			return math.MinInt64, Above
+		}
+		return math.MaxInt64, Below
+	}
+
+	panic("unreachable")
 }
 
 // IsInf reports whether x is +Inf or -Inf.
@@ -755,6 +812,7 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 		z.neg = x.neg
 		if x.form == finite {
 			z.exp = x.exp
+			// TODO(db47h): optimize copy of mantissa by rounding x to z direcly.
 			z.mant = z.mant.set(x.mant)
 		}
 		if z.prec == 0 {
@@ -1011,8 +1069,51 @@ func (z *Decimal) Sub(x, y *Decimal) *Decimal {
 	return z.Neg(y)
 }
 
+// Uint64 returns the unsigned integer resulting from truncating x
+// towards zero. If 0 <= x <= math.MaxUint64, the result is Exact
+// if x is an integer and Below otherwise.
+// The result is (0, Above) for x < 0, and (math.MaxUint64, Below)
+// for x > math.MaxUint64.
 func (x *Decimal) Uint64() (uint64, Accuracy) {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+
+	switch x.form {
+	case finite:
+		if x.neg {
+			return 0, Above
+		}
+		// 0 < x < +Inf
+		if x.exp <= 0 {
+			// 0 < x < 1
+			return 0, Below
+		}
+		// 1 <= x < 1<<64
+		if x.exp <= 20 {
+			var acc Accuracy = Exact
+			if x.MinPrec() > uint(x.exp) {
+				acc = Below // truncated
+			}
+			// get low 64 bits of t
+			if r, ok := x.intMant().toUint64(); ok {
+				return uint64(r), acc
+			}
+		}
+		// x too large
+		return math.MaxUint64, Below
+
+	case zero:
+		return 0, Exact
+
+	case inf:
+		if x.neg {
+			return 0, Above
+		}
+		return math.MaxUint64, Below
+	}
+
+	panic("unreachable")
 }
 
 func (z *Decimal) UnmarshalText(text []byte) error {

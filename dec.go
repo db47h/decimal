@@ -110,6 +110,47 @@ func (z dec) setUint64(x uint64) (dec, int32) {
 	return z, dig
 }
 
+// toUint64 returns the low 64 bits of z or MaxUint64 and true if z <= MaxUint64.
+func (x dec) toUint64() (uint64, bool) {
+	// using a decToNat style loop would modify x
+	// so we unroll the loop and cache the values.
+	if _W == 64 {
+		var lo, hi Word
+		switch l := len(x); l {
+		case 2:
+			lo = x[1]
+			fallthrough
+		case 1:
+			hi, lo = mulAddWWW_g(lo, _DB, x[0])
+			fallthrough
+		case 0:
+			return uint64(lo), hi == 0
+		default:
+			return ^uint64(0), false
+		}
+	}
+	var z2, z1, z0, r, lo Word
+	switch l := len(x); l {
+	case 3:
+		z2 = x[2]
+		fallthrough
+	case 2:
+		z1 = x[1]
+		fallthrough
+	case 1:
+		z0 = x[0]
+	case 0:
+		return 0, true
+	default:
+		return ^uint64(0), false
+	}
+	z1, r = mulAddWWW_g(z2, _DB, z1)
+	z0, r = mulAddWWW_g(r, _DB, z0)
+	lo = r // low 32 bits
+	z0, r = mulAddWWW_g(z1, _DB, z0)
+	return uint64(r)<<32 | uint64(lo), z0 == 0
+}
+
 func decToNat(z []big.Word, x dec) []big.Word {
 	if len(x) == 0 {
 		return z[:0]

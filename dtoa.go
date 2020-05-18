@@ -116,8 +116,7 @@ func (x *Decimal) Append(buf []byte, fmt byte, prec int) []byte {
 			rnd = prec
 		}
 		if rnd < digits {
-			// TODO(db47h): optimize copy of mantissa by limiting the copy to the relevant digits
-			x = new(Decimal).Copy(x).SetPrec(uint(rnd))
+			x = new(Decimal).SetMode(x.mode).SetPrec(uint(rnd)).Set(x)
 			digits = int(x.MinPrec())
 		}
 	}

@@ -107,7 +107,7 @@ func (z dec) setUint64(x uint64) (dec, int32) {
 		z[i] = Word(lo)
 		x = hi
 	}
-	return z, dig
+	return z.norm(), dig
 }
 
 // toUint64 returns the low 64 bits of z or MaxUint64 and true if z <= MaxUint64.

@@ -38,7 +38,7 @@ type Decimal struct {
 // NewDecimal panics with ErrNaN if x is a NaN.
 func NewDecimal(x float64) *Decimal {
 	if math.IsNaN(x) {
-		panic(ErrNaN{"NewFloat(NaN)"})
+		panic(ErrNaN{"NewDecimal(NaN)"})
 	}
 	return new(Decimal).SetFloat64(x)
 }
@@ -824,8 +824,51 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 	return z
 }
 
-func (z *Decimal) SetFloat64(x float64) *Decimal {
+func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 	panic("not implemented")
+}
+
+// SetFloat64 sets z to the (possibly rounded) value of x and returns z.
+// If z's precision is 0, it is changed to DefaultDecimalPrec (and rounding will have
+// no effect). SetFloat64 panics with ErrNaN if x is a NaN.
+func (z *Decimal) SetFloat64(x float64) *Decimal {
+	op := z.prec
+	// perform the conversion with 17 decimal digits
+	z.prec = 17
+	if math.IsNaN(x) {
+		panic(ErrNaN{"Decimal.SetFloat64(NaN)"})
+	}
+	z.acc = Exact
+	z.neg = math.Signbit(x) // handle -0, -Inf correctly
+	if x == 0 {
+		z.form = zero
+		return z
+	}
+	if math.IsInf(x, 0) {
+		z.form = inf
+		return z
+	}
+	// normalized x != 0
+	z.form = finite
+	fmant, exp2 := math.Frexp(x) // get normalized mantissa
+	exp2 -= 64
+	z.mant, z.exp = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
+	dnorm(z.mant)
+	// multiply / divide by 2**exp
+	if exp2 != 0 {
+		t := new(Decimal)
+		if exp2 < 0 {
+			z = z.Quo(z, t.pow2(uint64(-exp2)))
+		} else {
+			z = z.Mul(z, t.pow2(uint64(exp2)))
+		}
+	}
+	if op == 0 {
+		op = DefaultDecimalPrec
+	}
+	z.SetPrec(uint(op))
+	return z
+
 }
 
 // SetInf sets z to the infinite Decimal -Inf if signbit is

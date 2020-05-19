@@ -414,8 +414,7 @@ func (x *Decimal) Float(z *big.Float) *big.Float {
 
 	// now multiply/divide by 10**exp
 	if exp != 0 {
-		// add a full Word of precision for exponent conversion
-		t := new(big.Float).SetPrec(uint(p + _W))
+		t := new(big.Float).SetPrec(uint(p))
 		if exp < 0 {
 			if exp < MinExp {
 				// exponent overflow, convert mantissa first

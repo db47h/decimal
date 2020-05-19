@@ -7,8 +7,8 @@ package decimal
 import "math"
 
 var (
-	three = new(Decimal).SetUint64(3)
-	two   = new(Decimal).SetUint64(2)
+	three = NewDecimal(3.0)
+	two   = NewDecimal(2.0)
 )
 
 // Sqrt sets z to the rounded square root of x, and returns it.
@@ -80,7 +80,7 @@ func (z *Decimal) Sqrt(x *Decimal) *Decimal {
 	v := newDecimal(prec)
 	xf, _ := x.Float64()
 	sqi := newDecimal(prec)
-	sqi.SetPrec(17).SetFloat64(1 / math.Sqrt(xf))
+	sqi.SetFloat64(1 / math.Sqrt(xf))
 	for prec := prec + _DW; sqi.prec < prec; {
 		sqi.prec *= 2
 		u.prec = sqi.prec

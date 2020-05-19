@@ -7,13 +7,13 @@ import (
 )
 
 // DefaultDecimalPrec is the default minimum precision used when creating a new
-// Decimal from any other type. An uint64 requires up to 20 digits, which
-// amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits Words (32 bits).
-// Forcing the precision to 20 digits would result in 18 or 7 unused digits.
-// Using 34 instead gives a higher precision at no performance or memory cost
-// and gives room for 2 to 4 extra digits of extra precision for internal
-// computations at no performance or memory cost either. Also 34 digits matches
-// the precision of IEEE-754 decimal128.
+// Decimal from a *big.Int, uint64, int64, or string. An uint64 requires up to
+// 20 digits, which amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits
+// Words (32 bits). Forcing the precision to 20 digits would result in 18 or 7
+// unused digits. Using 34 instead gives a higher precision at no performance or
+// memory cost and gives room for 2 to 4 extra digits of extra precision for
+// internal computations at no performance or memory cost either. Also 34 digits
+// matches the precision of IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
 
 var decimalZero Decimal
@@ -34,7 +34,7 @@ type Decimal struct {
 }
 
 // NewDecimal allocates and returns a new Decimal set to x, with precision
-// DefaultDecimalPrec and rounding mode ToNearestEven. NewDecimal panics with
+// 17 and rounding mode ToNearestEven. NewDecimal panics with
 // ErrNaN if x is a NaN.
 func NewDecimal(x float64) *Decimal {
 	if math.IsNaN(x) {
@@ -833,20 +833,24 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 }
 
 // SetFloat sets z to the (possibly rounded) value of x and returns z. If z's
-// precision is 0, it is changed to max(⌈x.MinPrec() * Log10(2)⌉,
-// DefaultDecimalPrec). Conversion is performed using x's precision.
+// precision is 0, it is changed to ⌈x.Prec() * Log10(2)⌉.
+//
+// Conversion is performed using z's precision and rounding mode. Caveat: as a
+// result this may lead to inconsistencies between the ouputs of x.Text and
+// z.Text. To preserve this property, the conversion should be done using x's
+// precision and rounding mode ToNearestEven:
+//
+//  p, m := z.Prec(), z.Mode()
+//  z.SetPrec(0).SetMode(ToNearestEven).SetFloat(x)
+//  z.SetMode(m).SetPrec(p)
 func (z *Decimal) SetFloat(x *big.Float) *Decimal {
-	pp := z.prec
-	// convert using x's precision
-	z.prec = uint32(math.Ceil(float64(x.Prec()) * log10_2))
-	if pp == 0 {
-		pp = uint32(max(int(z.prec), DefaultDecimalPrec))
+	if z.prec == 0 {
+		z.prec = uint32(math.Ceil(float64(x.Prec()) * log10_2))
 	}
 	z.acc = Exact
 	z.neg = x.Signbit()
 	if z.IsInf() {
 		z.form = inf
-		z.prec = pp
 		return z
 	}
 
@@ -874,21 +878,17 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
 	}
-	z.prec = pp
 	z.round(0)
 	return z
 }
 
 // SetFloat64 sets z to the (possibly rounded) value of x and returns z. If z's
-// precision is 0, it is changed to DefaultDecimalPrec (and rounding will have no effect).
+// precision is 0, it is changed to 17 (and rounding will have no effect).
 // SetFloat64 panics with ErrNaN if x is a NaN. Conversion is performed using
-// x's precision.
+// z's precision and rounding mode. See caveat in (*Decimal).Float.
 func (z *Decimal) SetFloat64(x float64) *Decimal {
-	pp := z.prec
-	// perform the conversion with 17 decimal digits
-	z.prec = 17
-	if pp == 0 {
-		pp = DefaultDecimalPrec
+	if z.prec == 0 {
+		z.prec = 17
 	}
 	if math.IsNaN(x) {
 		panic(ErrNaN{"Decimal.SetFloat64(NaN)"})
@@ -918,7 +918,6 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
 	}
-	z.prec = pp
 	z.round(0)
 	return z
 }

@@ -20,7 +20,7 @@ var decimalZero Decimal
 
 var (
 	_ fmt.Scanner   = &decimalZero // *Decimal must implement fmt.Scanner
-	_ fmt.Formatter = &decimalZero // *Float must implement fmt.Formatter
+	_ fmt.Formatter = &decimalZero // *Decimal must implement fmt.Formatter
 )
 
 type Decimal struct {
@@ -33,7 +33,7 @@ type Decimal struct {
 	neg  bool
 }
 
-// NewDecimal allocates and returns a new Float set to x, with precision
+// NewDecimal allocates and returns a new Decimal set to x, with precision
 // DefaultDecimalPrec and rounding mode ToNearestEven. NewDecimal panics with
 // ErrNaN if x is a NaN.
 func NewDecimal(x float64) *Decimal {
@@ -601,8 +601,35 @@ func (x *Decimal) IsInt() bool {
 	return x.prec <= uint32(x.exp) || x.MinPrec() <= uint(x.exp)
 }
 
+// MantExp breaks x into its mantissa and exponent components
+// and returns the exponent. If a non-nil mant argument is
+// provided its value is set to the mantissa of x, with the
+// same precision and rounding mode as x. The components
+// satisfy x == mant × 10**exp, with 0.1 <= |mant| < 1.0.
+// Calling MantExp with a nil argument is an efficient way to
+// get the exponent of the receiver.
+//
+// Special cases are:
+//
+//	(  ±0).MantExp(mant) = 0, with mant set to   ±0
+//	(±Inf).MantExp(mant) = 0, with mant set to ±Inf
+//
+// x and mant may be the same in which case x is set to its
+// mantissa value.
 func (x *Decimal) MantExp(mant *Decimal) (exp int) {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+	if x.form == finite {
+		exp = int(x.exp)
+	}
+	if mant != nil {
+		mant.Copy(x)
+		if mant.form == finite {
+			mant.exp = 0
+		}
+	}
+	return
 }
 
 func (x *Decimal) MarshalText() (text []byte, err error) {
@@ -991,8 +1018,32 @@ func (z *Decimal) setExpAndRound(exp int64, sbit uint) {
 	z.round(sbit)
 }
 
+// SetMantExp sets z to mant × 10**exp and returns z.
+// The result z has the same precision and rounding mode
+// as mant. SetMantExp is an inverse of MantExp but does
+// not require 0.1 <= |mant| < 1.0. Specifically:
+//
+//	mant := new(Decimal)
+//	new(Decimal).SetMantExp(mant, x.MantExp(mant)).Cmp(x) == 0
+//
+// Special cases are:
+//
+//	z.SetMantExp(  ±0, exp) =   ±0
+//	z.SetMantExp(±Inf, exp) = ±Inf
+//
+// z and mant may be the same in which case z's exponent
+// is set to exp.
 func (z *Decimal) SetMantExp(mant *Decimal, exp int) *Decimal {
-	panic("not implemented")
+	if debugDecimal {
+		z.validate()
+		mant.validate()
+	}
+	z.Copy(mant)
+	if z.form != finite {
+		return z
+	}
+	z.setExpAndRound(int64(z.exp)+int64(exp), 0)
+	return z
 }
 
 // SetMode sets z's rounding mode to mode and returns an exact z.
@@ -1216,7 +1267,7 @@ func (x *Decimal) validate() {
 func validateBinaryOperands(x, y *Decimal) {
 	if !debugDecimal {
 		// avoid performance bugs
-		panic("validateBinaryOperands called but debugFloat is not set")
+		panic("validateBinaryOperands called but debugDecimal is not set")
 	}
 	if len(x.mant) == 0 {
 		panic("empty mantissa for x")

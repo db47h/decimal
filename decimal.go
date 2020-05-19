@@ -33,9 +33,9 @@ type Decimal struct {
 	neg  bool
 }
 
-// NewDecimal allocates and returns a new Float set to x,
-// with precision DefaultDecimalPrec and rounding mode ToNearestEven.
-// NewDecimal panics with ErrNaN if x is a NaN.
+// NewDecimal allocates and returns a new Float set to x, with precision
+// DefaultDecimalPrec and rounding mode ToNearestEven. NewDecimal panics with
+// ErrNaN if x is a NaN.
 func NewDecimal(x float64) *Decimal {
 	if math.IsNaN(x) {
 		panic(ErrNaN{"NewDecimal(NaN)"})
@@ -376,35 +376,25 @@ func (z *Decimal) Copy(x *Decimal) *Decimal {
 	return z
 }
 
-// Float returns the big.Float value nearest to x with precision prec and
-// RoundingMode set to that of x. The returned accuracy is the accuracy if the
-// conversion from base 10 to base 2.
-//
-// If prec is 0, the result precision will be set to the precision of x
-// (converting precision in decimal digits to bits).
-//
-// Note that for high enough exponents, the result might overflow and be set to
-// ±Inf. In this case, accuracy will be either Above or Below, depending on the
-// sign of x.
-func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
-	p := uint64(prec)
+// Float sets z to the (possibly rounded) value of x. If a non-nil *big.Float
+// argument z is provided, Float stores the result in z instead of allocating a
+// new big.Float.
+// If z's precision is 0, it is changed to max(⌈x.Prec() * log2(10)⌉, 64).
+func (x *Decimal) Float(z *big.Float) *big.Float {
+	if z == nil {
+		z = new(big.Float).SetMode(big.RoundingMode(x.mode))
+	}
+	p := uint64(z.Prec())
 	if p == 0 {
-		p = uint64(float64(x.prec)*log2_10) + 1
-		if p < 64 {
-			p = 64
-		}
+		p = uint64(max(int(math.Ceil(float64(x.prec)*log2_10)), 64))
+		z.SetPrec(0).SetPrec(uint(p))
 	}
-	if p > MaxPrec {
-		p = MaxPrec
-	}
-
-	z := new(big.Float).SetMode(big.RoundingMode(x.mode)).SetPrec(uint(p))
 
 	switch x.form {
 	case zero:
-		return z, Exact
+		return z.SetPrec(0).SetPrec(uint(p))
 	case inf:
-		return z.SetInf(x.neg), Exact
+		return z.SetInf(x.neg)
 	}
 
 	// big.Float has no SetBits. Need to use a temp Int.
@@ -412,34 +402,25 @@ func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
 	i.SetBits(decToNat(nil, x.mant))
 
 	exp := int64(x.exp) - int64(len(x.mant)*_DW)
-	if exp < MinExp {
-		// overflow.
-		return z, makeAcc(x.neg)
-	}
-
 	z = z.SetInt(&i)
 
-	// z = x.mant * 2**exp * 5**exp
-	// Set 2 exponent
-	z.SetMantExp(z, int(exp))
-
-	// now multiply/divide by 5**exp
-	// add a full Word of precision for exponent conversion
-	tp := ((p+_W-1)/_W + 1) * _W
-	if tp > MaxPrec {
-		tp = MaxPrec
+	// now multiply/divide by 10**exp
+	if exp != 0 {
+		// add a full Word of precision for exponent conversion
+		t := new(big.Float).SetPrec(uint(p + _W))
+		if exp < 0 {
+			if exp < MinExp {
+				// exponent overflow, convert mantissa first
+				l := uint64(len(x.mant) * _DW)
+				z.Quo(z, pow10Float(t, l))
+				exp += int64(l)
+			}
+			z.Quo(z, pow10Float(t, uint64(-exp)))
+		} else {
+			z.Mul(z, pow10Float(t, uint64(exp)))
+		}
 	}
-	t := new(big.Float).SetPrec(uint(tp))
-	if exp < 0 {
-		z.Quo(z, pow5Float(t, uint64(-exp)))
-	} else {
-		z.Mul(z, pow5Float(t, uint64(exp)))
-	}
-	if z.IsInf() {
-		// inaccurate result
-		return z, makeAcc(!x.neg)
-	}
-	return z, Accuracy(z.Acc())
+	return z
 }
 
 // Float32 returns the float32 value nearest to x. If x is too small to be
@@ -448,13 +429,13 @@ func (x *Decimal) Float(prec uint) (*big.Float, Accuracy) {
 // If x is too large to be represented by a float32 (|x| > math.MaxFloat32),
 // the result is (+Inf, Above) or (-Inf, Below), depending on the sign of x.
 func (x *Decimal) Float32() (float32, Accuracy) {
-	z, da := x.Float(32)
-	f, fa := z.Float32()
+	z := x.Float(new(big.Float).SetPrec(32))
+	f, a := z.Float32()
 	// If big.Float -> float64 conversion is accurate, use Decimal->Float accuracy.
-	if fa == big.Exact {
-		fa = big.Accuracy(da)
+	if a == big.Exact {
+		a = z.Acc()
 	}
-	return f, Accuracy(fa)
+	return f, Accuracy(a)
 }
 
 // Float64 returns the float64 value nearest to x. If x is too small to be
@@ -463,13 +444,13 @@ func (x *Decimal) Float32() (float32, Accuracy) {
 // If x is too large to be represented by a float64 (|x| > math.MaxFloat64),
 // the result is (+Inf, Above) or (-Inf, Below), depending on the sign of x.
 func (x *Decimal) Float64() (float64, Accuracy) {
-	z, da := x.Float(64)
-	f, fa := z.Float64()
+	z := x.Float(new(big.Float).SetPrec(64))
+	f, a := z.Float64()
 	// If big.Float -> float64 conversion is accurate, use Decimal->Float accuracy.
-	if fa == big.Exact {
-		fa = big.Accuracy(da)
+	if a == big.Exact {
+		a = z.Acc()
 	}
-	return f, Accuracy(fa)
+	return f, Accuracy(a)
 }
 
 func (z *Decimal) GobDecode(buf []byte) error {
@@ -510,7 +491,7 @@ func (x *Decimal) Int(z *big.Int) (*big.Int, Accuracy) {
 			acc = Exact
 		}
 		// TODO(db47h): decToNat incurs a copy of its x parameter.
-		// here we do not care about trashing it.
+		// Here we do not care about trashing it.
 		z.SetBits(decToNat(z.Bits(), x.intMant()))
 		return z, acc
 
@@ -824,17 +805,64 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 	return z
 }
 
+// SetFloat sets z to the (possibly rounded) value of x and returns z. If z's
+// precision is 0, it is changed to max(⌈x.MinPrec() * Log10(2)⌉,
+// DefaultDecimalPrec). Conversion is performed using x's precision.
 func (z *Decimal) SetFloat(x *big.Float) *Decimal {
-	panic("not implemented")
+	pp := z.prec
+	// convert using x's precision
+	z.prec = uint32(math.Ceil(float64(x.Prec()) * log10_2))
+	if pp == 0 {
+		pp = uint32(max(int(z.prec), DefaultDecimalPrec))
+	}
+	z.acc = Exact
+	z.neg = x.Signbit()
+	if z.IsInf() {
+		z.form = inf
+		z.prec = pp
+		return z
+	}
+
+	// TODO(db47h): the conversion is somewhat contrieved,
+	// but we don't have access to x's mantissa.
+	f := new(big.Float).Copy(x)
+	// get int value of mantissa
+	exp2 := int64(f.MantExp(f))
+	fprec := f.MinPrec()
+	f.SetMantExp(f, int(fprec))
+	i, _ := f.Int(nil)
+	z.SetInt(i)
+	exp2 -= int64(fprec)
+	if exp2 != 0 {
+		t := new(Decimal).SetPrec(uint(z.prec))
+		if exp2 < 0 {
+			if exp2 < MinExp {
+				// handle exponent overflow. Can only happen if exp2 < 0
+				// convert mantissa first, then apply exponent.
+				exp2 += int64(fprec)
+				z = z.Quo(z, t.pow2(uint64(fprec)))
+			}
+			z = z.Quo(z, t.pow2(uint64(-exp2)))
+		} else {
+			z = z.Mul(z, t.pow2(uint64(exp2)))
+		}
+	}
+	z.prec = pp
+	z.round(0)
+	return z
 }
 
-// SetFloat64 sets z to the (possibly rounded) value of x and returns z.
-// If z's precision is 0, it is changed to DefaultDecimalPrec (and rounding will have
-// no effect). SetFloat64 panics with ErrNaN if x is a NaN.
+// SetFloat64 sets z to the (possibly rounded) value of x and returns z. If z's
+// precision is 0, it is changed to DefaultDecimalPrec (and rounding will have no effect).
+// SetFloat64 panics with ErrNaN if x is a NaN. Conversion is performed using
+// x's precision.
 func (z *Decimal) SetFloat64(x float64) *Decimal {
-	op := z.prec
+	pp := z.prec
 	// perform the conversion with 17 decimal digits
 	z.prec = 17
+	if pp == 0 {
+		pp = DefaultDecimalPrec
+	}
 	if math.IsNaN(x) {
 		panic(ErrNaN{"Decimal.SetFloat64(NaN)"})
 	}
@@ -856,19 +884,16 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 	dnorm(z.mant)
 	// multiply / divide by 2**exp
 	if exp2 != 0 {
-		t := new(Decimal)
+		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
 			z = z.Quo(z, t.pow2(uint64(-exp2)))
 		} else {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
 	}
-	if op == 0 {
-		op = DefaultDecimalPrec
-	}
-	z.SetPrec(uint(op))
+	z.prec = pp
+	z.round(0)
 	return z
-
 }
 
 // SetInf sets z to the infinite Decimal -Inf if signbit is
@@ -883,33 +908,37 @@ func (z *Decimal) SetInf(signbit bool) *Decimal {
 }
 
 const log2_10 = math.Ln10 / math.Ln2
+const log10_2 = math.Ln2 / math.Ln10
 
-// SetInt sets z to the (possibly rounded) value of x and returns z.
-// If z's precision is 0, it is changed to the larger of x.BitLen()
-// or DefaultDecimalPrec (and rounding will have no effect).
+// SetInt sets z to the (possibly rounded) value of x and returns z. If z's
+// precision is 0, it is changed to max(⌈x.BitLen() * Log10(2)⌉,
+// DefaultDecimalPrec) (and rounding will have no effect).
 func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	bits := uint32(x.BitLen())
-	prec := uint32(float64(bits)/log2_10) + 1 // off by 1 at most
-	// TODO(db47h): adjust precision if needed
-	if z.prec == 0 {
-		z.prec = umax32(prec, DefaultDecimalPrec)
-	}
-	// TODO(db47h) truncating x could be more efficient if z.prec > 0
-	// but small compared to the size of x, or if there are many trailing 0's.
 	z.acc = Exact
 	z.neg = x.Sign() < 0
 	if bits == 0 {
 		z.form = zero
+		z.prec = uint32(max(int(z.prec), DefaultDecimalPrec))
 		return z
 	}
 	// x != 0
-	z.mant = z.mant.make((int(prec) + _DW - 1) / _DW).setNat(x.Bits())
+
+	prec := int(math.Ceil(float64(bits) * log10_2)) // off by 1 at most
+	// TODO(db47h) truncating x could be more efficient if z.prec > 0
+	// but small compared to the size of x.
+	z.mant = z.mant.make((prec + _DW - 1) / _DW).setNat(x.Bits())
 	exp := dnorm(z.mant)
+	if z.prec == 0 {
+		// adjust precision
+		z.prec = uint32(max(len(z.mant)*_DW-int(z.mant.ntz()), DefaultDecimalPrec))
+	}
 	z.setExpAndRound(int64(len(z.mant))*_DW-exp, 0)
 	return z
 }
 
 func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
+	prec := uint32(20) // TODO(db47h): should we adjust to 19 for int64?
 	if z.prec == 0 {
 		z.prec = DefaultDecimalPrec
 	}
@@ -923,7 +952,7 @@ func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
 	z.form = finite
 	z.mant, z.exp = z.mant.setUint64(x)
 	dnorm(z.mant)
-	if z.prec < 20 {
+	if z.prec < prec {
 		z.round(0)
 	}
 	return z

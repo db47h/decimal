@@ -1,6 +1,7 @@
 package decimal
 
 import (
+	"math"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -105,4 +106,17 @@ func BenchmarkDecimal_dnorm(b *testing.B) {
 		d[len(d)-1] = Word(rand.Uint64()) % _DB
 		benchU = uint(dnorm(d))
 	}
+}
+
+func TestDecimal_String(t *testing.T) {
+	z := big.NewFloat(1.1)
+	t.Logf("z: %g!", z)
+	// x, _ := new(Decimal).SetPrec(34).SetString("9223372036854775808")
+	x := new(Decimal).SetPrec(17).SetFloat64(math.MaxFloat64)
+	// t.Log(x.Text('p', 0))
+	t.Logf("x: %g!", x)
+	x.SetPrec(128).SetFloat(z)
+	t.Logf("z = %g -> x = %g", z, x)
+	x.Float(z)
+	t.Logf("x = %g -> z = %g", x, z)
 }

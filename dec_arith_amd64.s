@@ -528,7 +528,7 @@ TEXT ·shl10VU(SB),NOSPLIT,$0
 	JEQ X8c		// copy if s = 0
 
 	MOVQ $_DW, CX
-	LEAQ ·pow10s(SB), DI
+	LEAQ ·pow10tab(SB), DI
 	SUBQ BX, CX
 	MOVQ 0(DI)(BX*8), R12 // m = pow10(s)
 	MOVQ 0(DI)(CX*8), R11 // d = pow10(_DW-s)
@@ -582,7 +582,7 @@ TEXT ·shr10VU(SB),NOSPLIT,$0
 	JEQ X9c		// copy if s = 0
 
 	MOVQ $_DW, CX
-	LEAQ ·pow10s(SB), SI
+	LEAQ ·pow10tab(SB), SI
 	SUBQ BX, CX
 	MOVQ 0(SI)(BX*8), R11 // d = pow10(s)
 	MOVQ 0(SI)(CX*8), R12 // m = pow10(_DW-s)

@@ -280,56 +280,19 @@ func greaterThan(x1, x2, y1, y2 Word) bool {
 	return x1 > y1 || x1 == y1 && x2 > y2
 }
 
-// These powers of 5 fit into a uint64.
-//
-//	for p, q := uint64(0), uint64(1); p < q; p, q = q, q*5 {
-//		fmt.Println(q)
-//	}
-//
-var pow5tab = [...]uint64{
-	1,
-	5,
-	25,
-	125,
-	625,
-	3125,
-	15625,
-	78125,
-	390625,
-	1953125,
-	9765625,
-	48828125,
-	244140625,
-	1220703125,
-	6103515625,
-	30517578125,
-	152587890625,
-	762939453125,
-	3814697265625,
-	19073486328125,
-	95367431640625,
-	476837158203125,
-	2384185791015625,
-	11920928955078125,
-	59604644775390625,
-	298023223876953125,
-	1490116119384765625,
-	7450580596923828125,
-}
-
-// pow5 sets z to 5**n and returns z.
+// pow10 sets z to 10**n and returns z.
 // n must not be negative.
-func pow5Float(z *big.Float, n uint64) *big.Float {
-	const m = uint64(len(pow5tab) - 1)
+func pow10Float(z *big.Float, n uint64) *big.Float {
+	const m = uint64(len(pow10tab) - 1)
 	if n <= m {
-		return z.SetUint64(pow5tab[n])
+		return z.SetUint64(pow10tab[n])
 	}
 	// n > m
 
-	z.SetUint64(pow5tab[m])
+	z.SetUint64(pow10tab[m])
 	n -= m
 
-	f := new(big.Float).SetPrec(z.Prec()).SetUint64(5)
+	f := new(big.Float).SetPrec(z.Prec() + _W).SetUint64(10)
 
 	for n > 0 {
 		if n&1 != 0 {

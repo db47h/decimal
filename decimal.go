@@ -13,9 +13,10 @@ import (
 // 20 digits, which amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits
 // Words (32 bits). Forcing the precision to 20 digits would result in 18 or 7
 // unused digits. Using 34 instead gives a higher precision at no performance or
-// memory cost and gives room for 2 to 4 extra digits of extra precision for
-// internal computations at no performance or memory cost either. Also 34 digits
-// matches the precision of IEEE-754 decimal128.
+// memory cost on 64 bits platforms (but one more Word on 32 bits) and gives
+// room for 2 to 4 extra digits of extra precision for internal computations at
+// no added performance or memory cost. Also 34 digits matches the precision of
+// IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
 
 var decimalZero Decimal
@@ -984,7 +985,7 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 }
 
 func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
-	prec := uint32(20) // TODO(db47h): should we adjust to 19 for int64?
+	prec := uint32(20)
 	if z.prec == 0 {
 		z.prec = DefaultDecimalPrec
 	}

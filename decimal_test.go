@@ -1,6 +1,7 @@
 package decimal
 
 import (
+	"math"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -112,4 +113,21 @@ func BenchmarkDecimal_Sqrt(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		z.Sqrt(x)
 	}
+}
+
+func TestDecimal_String(t *testing.T) {
+	z := big.NewFloat(1.1)
+	t.Logf("z: %g!", z)
+	// x, _ := new(Decimal).SetPrec(34).SetString("9223372036854775808")
+	x := new(Decimal).SetPrec(17).SetFloat64(math.MaxFloat64)
+	// t.Log(x.Text('p', 0))
+	t.Logf("x: %g!", x)
+	x.SetPrec(17).SetFloat(z)
+	t.Logf("z = %g -> x (%d) = %g", z, x.Prec(), x)
+	x.Float(z)
+	t.Logf("x = %g -> z = %g", x, z)
+	x.Sqrt(x.SetPrec(33))
+	t.Logf("x: %g!", x)
+	t.Logf("x: %.*f!", x.Prec()-1, x)
+	t.Log("   1.41421356237309504880168872420969807856967187537694807317667974")
 }

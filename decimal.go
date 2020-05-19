@@ -1,6 +1,8 @@
 package decimal
 
 import (
+	"encoding"
+	"encoding/gob"
 	"fmt"
 	"math"
 	"math/big"
@@ -19,8 +21,14 @@ const DefaultDecimalPrec = 34
 var decimalZero Decimal
 
 var (
-	_ fmt.Scanner   = &decimalZero // *Decimal must implement fmt.Scanner
-	_ fmt.Formatter = &decimalZero // *Decimal must implement fmt.Formatter
+	// required implemented interfaces
+	_ fmt.Stringer             = &decimalZero
+	_ fmt.Scanner              = &decimalZero
+	_ fmt.Formatter            = &decimalZero
+	_ encoding.TextMarshaler   = &decimalZero
+	_ encoding.TextUnmarshaler = &decimalZero
+	_ gob.GobEncoder           = &decimalZero
+	_ gob.GobDecoder           = &decimalZero
 )
 
 type Decimal struct {
@@ -423,6 +431,31 @@ func (x *Decimal) Float(z *big.Float) *big.Float {
 	return z
 }
 
+// pow10 sets z to 10**n and returns z.
+// n must not be negative.
+func pow10Float(z *big.Float, n uint64) *big.Float {
+	const m = uint64(len(pow10tab) - 1)
+	if n <= m {
+		return z.SetUint64(pow10tab[n])
+	}
+	// n > m
+
+	z.SetUint64(pow10tab[m])
+	n -= m
+
+	f := new(big.Float).SetPrec(z.Prec() + _W).SetUint64(10)
+
+	for n > 0 {
+		if n&1 != 0 {
+			z.Mul(z, f)
+		}
+		f.Mul(f, f)
+		n >>= 1
+	}
+
+	return z
+}
+
 // Float32 returns the float32 value nearest to x. If x is too small to be
 // represented by a float32 (|x| < math.SmallestNonzeroFloat32), the result
 // is (0, Below) or (-0, Above), respectively, depending on the sign of x.
@@ -451,14 +484,6 @@ func (x *Decimal) Float64() (float64, Accuracy) {
 		a = z.Acc()
 	}
 	return f, Accuracy(a)
-}
-
-func (z *Decimal) GobDecode(buf []byte) error {
-	panic("not implemented")
-}
-
-func (x *Decimal) GobEncode() ([]byte, error) {
-	panic("not implemented")
 }
 
 // Int returns the result of truncating x towards zero; or nil if x is an
@@ -630,10 +655,6 @@ func (x *Decimal) MantExp(mant *Decimal) (exp int) {
 		}
 	}
 	return
-}
-
-func (x *Decimal) MarshalText() (text []byte, err error) {
-	panic("not implemented")
 }
 
 // MinPrec returns the minimum precision required to represent x exactly
@@ -1232,10 +1253,6 @@ func (x *Decimal) Uint64() (uint64, Accuracy) {
 	}
 
 	panic("unreachable")
-}
-
-func (z *Decimal) UnmarshalText(text []byte) error {
-	panic("not implemented")
 }
 
 func (x *Decimal) validate() {

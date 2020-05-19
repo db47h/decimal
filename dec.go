@@ -1155,3 +1155,46 @@ func decKaratsuba(z, x, y dec) {
 		decKaratsubaSub(z[n2:], p, n)
 	}
 }
+
+// bytes writes the value of x into buf using big-endian encoding.
+// len(buf) must be >= len(x)*_S. The value of x is encoded in the
+// slice buf[i:]. The number i of unused bytes at the beginning of
+// buf is returned as result.
+func (x dec) bytes(buf []byte) (i int) {
+	i = len(buf)
+	for _, d := range x {
+		for j := 0; j < _S; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
+
+	for i < len(buf) && buf[i] == 0 {
+		i++
+	}
+
+	return
+}
+
+// setBytes interprets buf as the bytes of a big-endian unsigned
+// integer, sets z to that value, and returns z.
+func (z dec) setBytes(buf []byte) dec {
+	z = z.make((len(buf) + _S - 1) / _S)
+
+	i := len(buf)
+	for k := 0; i >= _S; k++ {
+		z[k] = bigEndianWord(buf[i-_S : i])
+		i -= _S
+	}
+	if i > 0 {
+		var d Word
+		for s := uint(0); i > 0; s += 8 {
+			d |= Word(buf[i-1]) << s
+			i--
+		}
+		z[len(z)-1] = d
+	}
+
+	return z.norm()
+}

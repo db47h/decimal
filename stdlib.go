@@ -3,6 +3,7 @@
 package decimal
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -280,31 +281,6 @@ func greaterThan(x1, x2, y1, y2 Word) bool {
 	return x1 > y1 || x1 == y1 && x2 > y2
 }
 
-// pow10 sets z to 10**n and returns z.
-// n must not be negative.
-func pow10Float(z *big.Float, n uint64) *big.Float {
-	const m = uint64(len(pow10tab) - 1)
-	if n <= m {
-		return z.SetUint64(pow10tab[n])
-	}
-	// n > m
-
-	z.SetUint64(pow10tab[m])
-	n -= m
-
-	f := new(big.Float).SetPrec(z.Prec() + _W).SetUint64(10)
-
-	for n > 0 {
-		if n&1 != 0 {
-			z.Mul(z, f)
-		}
-		f.Mul(f, f)
-		n >>= 1
-	}
-
-	return z
-}
-
 func abs(x int) int {
 	if x < 0 {
 		return -x
@@ -341,4 +317,12 @@ func makeNat(z []big.Word, n int) []big.Word {
 	// because it increases the chance that a value can be reused.
 	const e = 4 // extra capacity
 	return make([]big.Word, n, n+e)
+}
+
+// bigEndianWord returns the contents of buf interpreted as a big-endian encoded Word value.
+func bigEndianWord(buf []byte) Word {
+	if _W == 64 {
+		return Word(binary.BigEndian.Uint64(buf))
+	}
+	return Word(binary.BigEndian.Uint32(buf))
 }

@@ -106,3 +106,10 @@ func BenchmarkDecimal_dnorm(b *testing.B) {
 		benchU = uint(dnorm(d))
 	}
 }
+func BenchmarkDecimal_Sqrt(b *testing.B) {
+	x := new(Decimal).SetUint64(2)
+	z := new(Decimal).SetPrec(34)
+	for i := 0; i < b.N; i++ {
+		z.Sqrt(x)
+	}
+}

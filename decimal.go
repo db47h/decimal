@@ -1121,10 +1121,6 @@ func (x *Decimal) Signbit() bool {
 	return x.neg
 }
 
-func (z *Decimal) Sqrt(x *Decimal) *Decimal {
-	panic("not implemented")
-}
-
 // Sub sets z to the rounded difference x-y and returns z.
 // Precision, rounding, and accuracy reporting are as for Add.
 // Sub panics with ErrNaN if x and y are infinities with equal

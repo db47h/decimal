@@ -7,8 +7,8 @@ package decimal
 import "math"
 
 var (
-	three = NewDecimal(3.0)
-	two   = NewDecimal(2.0)
+	oneHalf = NewDecimal(0.5) // will be exact
+	three   = NewDecimal(3.0)
 )
 
 // Sqrt sets z to the rounded square root of x, and returns it.
@@ -85,11 +85,11 @@ func (z *Decimal) Sqrt(x *Decimal) *Decimal {
 		sqi.prec *= 2
 		u.prec = sqi.prec
 		v.prec = sqi.prec
-		u.Mul(sqi, sqi) //   u = sqi²
-		u.Mul(x, u)     //     = x.sqi²
-		v.Sub(three, u) //   v = 3 - x.sqi²
-		u.Mul(sqi, v)   //   u = sqi(3 - x.sqi²)
-		sqi.Quo(u, two) // sqi = ½sqi(3 - x.sqi²)
+		u.Mul(sqi, sqi)     //   u = sqi²
+		u.Mul(x, u)         //     = x.sqi²
+		v.Sub(three, u)     //   v = 3 - x.sqi²
+		u.Mul(sqi, v)       //   u = sqi(3 - x.sqi²)
+		sqi.Mul(u, oneHalf) // sqi = ½sqi(3 - x.sqi²)
 	}
 	// sqi = 1/√x
 

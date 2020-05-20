@@ -930,7 +930,8 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 	exp2 -= 64
 	z.mant, z.exp = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
 	dnorm(z.mant)
-	// multiply / divide by 2**exp
+	// multiply / divide by 2**exp with increased precision
+	z.prec += 1
 	if exp2 != 0 {
 		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
@@ -939,6 +940,7 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
 	}
+	z.prec -= 1
 	z.round(0)
 	return z
 }

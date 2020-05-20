@@ -2,9 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file implements Float-to-string conversion functions.
-// It is closely following the corresponding implementation
-// in strconv/ftoa.go, but modified and simplified for Float.
+// This file implements Decimal-to-string conversion functions. It is closely
+// following the corresponding implementation in math/big/ftoa.go.
 
 package decimal
 
@@ -48,7 +47,7 @@ func (x *Decimal) Text(format byte, prec int) string {
 }
 
 // String formats x like x.Text('g', 10).
-// (String must be called explicitly, Float.Format does not support %s verb.)
+// (String must be called explicitly, Decimal.Format does not support %s verb.)
 func (x *Decimal) String() string {
 	return x.Text('g', 10)
 }
@@ -369,7 +368,7 @@ func (x *Decimal) Format(s fmt.State, format rune) {
 	case 'e', 'E', 'f', 'b', 'p':
 		// nothing to do
 	case 'F':
-		// (*Float).Text doesn't support 'F'; handle like 'f'
+		// (*Decimal).Text doesn't support 'F'; handle like 'f'
 		format = 'f'
 	case 'v':
 		// handle like 'g'

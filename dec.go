@@ -46,13 +46,16 @@ func (x dec) digits() uint {
 	return 0
 }
 
-func (x dec) ntz() uint {
-	for i, w := range x {
-		if w != 0 {
-			return uint(i)*_DW + decTrailingZeros(uint(w))
-		}
+func (x dec) trailingZeroDigits() uint {
+	if len(x) == 0 {
+		return 0
 	}
-	return 0
+	var i uint
+	for x[i] == 0 {
+		i++
+	}
+	// x[i] != 0
+	return i*_DW + trailingZeroDigits(uint(x[i]))
 }
 
 func (x dec) digit(i uint) uint {
@@ -106,6 +109,50 @@ func (z dec) setUint64(x uint64) (dec, int32) {
 		x = hi
 	}
 	return z.norm(), dig
+}
+
+func (x dec) msd64() (uint64, uint) {
+	// l := len(x)
+	// if l == 0 {
+	// 	return 0, 0
+	// }
+	// var sticky uint
+	// if _W == 64 {
+	// 	var hi, lo Word
+	// 	l -= 2
+	// 	lo = x[l+1]
+	// 	if l > 0 {
+	// 		hi, lo = mulAddWWW_g(lo, _DB, x[l])
+	// 	} else {
+	// 		hi, lo = lo, 0
+	// 	}
+	// 	// normalize result
+	// 	sh := bits.LeadingZeros64(uint64(hi))
+	// 	if lo<<sh != 0 {
+	// 		sticky = 1
+	// 	} else if l > 0 {
+	// 		sticky = x.sticky(uint(l) * _DW)
+	// 	}
+	// 	return uint64(hi<<sh | lo>>(64-sh)), sticky
+	// } else {
+	// 	panic("not implemented")
+	// }
+	t := decToNat(nil, x)
+	i := len(t)
+	for i > 0 && t[i-1] == 0 {
+		i--
+	}
+	t = t[:i]
+	sh := bits.LeadingZeros(uint(t[len(t)-1]))
+	if sh != 0 {
+		var msb big.Word
+		for i := 0; i < len(t); i++ {
+			w := t[i]
+			t[i] = w<<sh | msb
+			msb = w >> (64 - sh)
+		}
+	}
+	return uint64(t[len(t)-1]), 0
 }
 
 // toUint64 returns the low 64 bits of z or MaxUint64 and true if z <= MaxUint64.

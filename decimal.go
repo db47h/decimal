@@ -648,7 +648,7 @@ func (x *Decimal) MinPrec() uint {
 	if x.form != finite {
 		return 0
 	}
-	return uint(len(x.mant))*_DW - x.mant.ntz()
+	return uint(len(x.mant))*_DW - x.mant.trailingZeroDigits()
 }
 
 // Mode returns the rounding mode of x.
@@ -967,7 +967,7 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	exp := dnorm(z.mant)
 	if z.prec == 0 {
 		// adjust precision
-		z.prec = uint32(max(len(z.mant)*_DW-int(z.mant.ntz()), DefaultDecimalPrec))
+		z.prec = uint32(max(len(z.mant)*_DW-int(z.mant.trailingZeroDigits()), DefaultDecimalPrec))
 	}
 	z.setExpAndRound(int64(len(z.mant))*_DW-exp, 0)
 	return z

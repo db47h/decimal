@@ -566,20 +566,6 @@ func BenchmarkDecExpNN(b *testing.B) {
 	}
 }
 
-func BenchmarkDecExp3Power(b *testing.B) {
-	const x = 3
-	for _, y := range []Word{
-		0x10, 0x40, 0x100, 0x400, 0x1000, 0x4000, 0x10000, 0x40000, 0x100000, 0x400000,
-	} {
-		b.Run(fmt.Sprintf("%#x", y), func(b *testing.B) {
-			var z dec
-			for i := 0; i < b.N; i++ {
-				z.expWW(x, y)
-			}
-		})
-	}
-}
-
 func decFibo(n int) dec {
 	switch n {
 	case 0:

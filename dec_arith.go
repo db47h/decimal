@@ -67,7 +67,7 @@ func nlz10(x Word) uint {
 	return _DW - decDigits64(uint64(x))
 }
 
-func decTrailingZeros(n uint) uint {
+func trailingZeroDigits(n uint) uint {
 	var d uint
 	if bits.UintSize > 32 {
 		if uint64(n)%10000000000000000 == 0 {

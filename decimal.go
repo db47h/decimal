@@ -805,8 +805,57 @@ func (z *Decimal) uquo(x, y *Decimal) {
 	z.setExpAndRound(e-dnorm(z.mant), sbit)
 }
 
+// Rat returns the rational number corresponding to x;
+// or nil if x is an infinity.
+// The result is Exact if x is not an Inf.
+// If a non-nil *Rat argument z is provided, Rat stores
+// the result in z instead of allocating a new Rat.
 func (x *Decimal) Rat(z *big.Rat) (*big.Rat, Accuracy) {
-	panic("not implemented")
+	if debugDecimal {
+		x.validate()
+	}
+
+	if z == nil && x.form <= finite {
+		z = new(big.Rat)
+	}
+
+	switch x.form {
+	case finite:
+		// 0 < |x| < +Inf
+		allDigits := int32(len(x.mant)) * _DW
+		// clear denominator
+		z.Denom().SetBits(z.Denom().Bits()[:0])
+		// build up numerator and denominator
+		switch {
+		case x.exp > allDigits:
+			m := dec(nil).shl(x.mant, uint(x.exp-allDigits))
+			z.Num().SetBits(decToNat(z.Num().Bits(), m))
+			// z already in normal form
+		default:
+			z.Num().SetBits(decToNat(z.Num().Bits(), x.mant))
+			// z already in normal form
+		case x.exp < allDigits:
+			z.Num().SetBits(decToNat(z.Num().Bits(), x.mant))
+			t, _ := dec(nil).setUint64(1)
+			t = t.shl(t, uint(allDigits-x.exp))
+			// we cannot set z.b directly since z.norm() is not exported.
+			y := new(big.Rat)
+			y.Num().SetBits(decToNat(y.Num().Bits(), t))
+			z = z.Quo(z, y)
+		}
+		if x.neg {
+			z.Neg(z)
+		}
+		return z, Exact
+
+	case zero:
+		return z.SetInt64(0), Exact
+
+	case inf:
+		return nil, makeAcc(x.neg)
+	}
+
+	panic("unreachable")
 }
 
 // Set sets z to the (possibly rounded) value of x and returns z.
@@ -1095,8 +1144,20 @@ func (z *Decimal) SetPrec(prec uint) *Decimal {
 	return z
 }
 
+// SetRat sets z to the (possibly rounded) value of x and returns z.
+// If z's precision is 0, it is changed to the largest of a.BitLen(),
+// b.BitLen(), or DefaultDecimalPrec; with x = a/b.
 func (z *Decimal) SetRat(x *big.Rat) *Decimal {
-	panic("not implemented")
+	if x.IsInt() {
+		return z.SetInt(x.Num())
+	}
+	var a, b Decimal
+	a.SetInt(x.Num())
+	b.SetInt(x.Denom())
+	if z.prec == 0 {
+		z.prec = umax32(a.prec, b.prec)
+	}
+	return z.Quo(&a, &b)
 }
 
 // SetUint64 sets z to the (possibly rounded) value of x and returns z. If z's

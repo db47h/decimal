@@ -34,6 +34,49 @@ var (
 	_ gob.GobDecoder           = &decimalZero
 )
 
+// A nonzero finite Decimal represents a multi-precision decimal floating point
+// number
+//
+//   sign × mantissa × 10**exponent
+//
+// with 0.1 <= mantissa < 1.0, and MinExp <= exponent <= MaxExp. A Decimal may
+// also be zero (+0, -0) or infinite (+Inf, -Inf). All Decimals are ordered, and
+// the ordering of two Decimals x and y is defined by x.Cmp(y).
+//
+// Each Decimal value also has a precision, rounding mode, and accuracy. The
+// precision is the maximum number of mantissa decimal digits available to
+// represent the value. The rounding mode specifies how a result should be
+// rounded to fit into the mantissa bits, and accuracy describes the rounding
+// error with respect to the exact result.
+//
+// Unless specified otherwise, all operations (including setters) that specify a
+// *Decimal variable for the result (usually via the receiver with the exception
+// of MantExp), round the numeric result according to the precision and rounding
+// mode of the result variable.
+//
+// If the provided result precision is 0 (see below), it is set to the precision
+// of the argument with the largest precision value before any rounding takes
+// place, and the rounding mode remains unchanged. Thus, uninitialized Decimals
+// provided as result arguments will have their precision set to a reasonable
+// value determined by the operands, and their mode is the zero value for
+// RoundingMode (ToNearestEven).
+//
+// By setting the desired precision to 16 or 53 and using matching rounding mode
+// (typically ToNearestEven), Decimal operations produce the same results as the
+// corresponding decimal64 or decimal128 IEEE-754 decimal arithmetic for
+// operands that correspond to normal (i.e., not denormal) decimal64 or
+// decimal128 numbers. Exponent underflow and overflow lead to a 0 or an
+// Infinity for different values than IEEE-754 because Decimal exponents have a
+// much larger range.
+//
+// The zero (uninitialized) value for a Decimal is ready to use and represents
+// the number +0.0 exactly, with precision 0 and rounding mode ToNearestEven.
+//
+// Operations always take pointer arguments (*Decimal) rather than Decimal
+// values, and each unique Decimal value requires its own unique *Decimal
+// pointer. To "copy" a Decimal value, an existing (or newly allocated) Decimal
+// must be set to a new value using the Decimal.Set method; shallow copies of
+// Decimals are not supported and may lead to errors.
 type Decimal struct {
 	mant dec
 	exp  int32
@@ -1472,4 +1515,44 @@ func (z *Decimal) umul(x, y *Decimal) {
 		z.mant = z.mant.mul(x.mant, y.mant)
 	}
 	z.setExpAndRound(e-dnorm(z.mant), 0)
+}
+
+// DigitsPerWord is the number of decimal digits per 32 or 64 bits Word in the
+// mantissa.
+const DigitsPerWord = _DW
+
+// BitsExp provides raw (unchecked but fast) access to x by returning its mantissa
+// (as a little-endian Word slice) and exponent. The result and x share the same
+// underlying array.
+//
+// Bits is intended to support implementation of missing low-level Decimal
+// functionality outside this package; it should be avoided otherwise.
+func (x *Decimal) BitsExp() ([]Word, int32) {
+	return x.mant, x.exp
+}
+
+// SetBitsExp provides raw (unchecked but fast) access to z by setting its
+// mantissa to mant (interpreted as a little-endian Word slice) and exponent to
+// exp, returning z rounded to z.Prec(). The result and mant share the same
+// underlying array. If mant is not normalized, SetBitsExp will normalize it and
+// adjust the exponent accordingly.
+//
+// A mantissa is normalized when its most significant Word has a non-zero most
+// significant digit:
+//
+//  mant[len(mant)-1] / 10**(DigitsPerWord-1) != 0
+//
+// SetBitsExp is intended to support implementation of missing low-level Decimal
+// functionality outside this package; it should be avoided otherwise.
+func (z *Decimal) SetBitsExp(mant []Word, exp int32) *Decimal {
+	z.mant = dec(mant).norm()
+	z.neg = false
+	if len(z.mant) > 0 {
+		z.setExpAndRound(int64(exp)-dnorm(z.mant)-int64(len(mant)-len(z.mant))*_DW, 0)
+	} else {
+		z.acc = Exact
+		z.form = zero
+		z.exp = 0
+	}
+	return z
 }

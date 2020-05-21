@@ -195,12 +195,11 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 			sz += prec
 		}
 	case 'b':
-		// -0.ddde±dd
-		sz += 2
-		fallthrough
-	case 'p':
 		// -ddddde±dd
-		sz += 1 + digits + 1 + expSz(x.exp)
+		sz += len(x.mant)*_DW + 1 + expSz(x.exp)
+	case 'p':
+		// -0.ddde±dd
+		sz += 2 + digits + 1 + expSz(x.exp)
 	default:
 		sz = prec
 	}

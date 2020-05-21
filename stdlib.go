@@ -46,9 +46,9 @@ const (
 	inf
 )
 
-// RoundingMode determines how a Float value is rounded to the
-// desired precision. Rounding may change the Float value; the
-// rounding error is described by the Float's Accuracy.
+// RoundingMode determines how a Decimal value is rounded to the
+// desired precision. Rounding may change the Decimal value; the
+// rounding error is described by the Decimal's Accuracy.
 type RoundingMode byte
 
 // These constants define supported rounding modes.
@@ -64,10 +64,10 @@ const (
 //go:generate stringer -type=RoundingMode
 
 // Accuracy describes the rounding error produced by the most recent
-// operation that generated a Float value, relative to the exact value.
+// operation that generated a Decimal value, relative to the exact value.
 type Accuracy int8
 
-// Constants describing the Accuracy of a Float.
+// Constants describing the Accuracy of a Decimal.
 const (
 	Below Accuracy = -1
 	Exact Accuracy = 0
@@ -231,7 +231,7 @@ func pow(x Word, n int) (p Word) {
 	return
 }
 
-// An ErrNaN panic is raised by a Float operation that would lead to
+// An ErrNaN panic is raised by a Decimal operation that would lead to
 // a NaN under IEEE-754 rules. An ErrNaN implements the error interface.
 type ErrNaN struct {
 	msg string

@@ -168,7 +168,7 @@ func (z *Decimal) pow2(n uint64) *Decimal {
 	return z
 }
 
-// Parse parses s which must contain a text representation of a floating- point
+// Parse parses s which must contain a text representation of a floating-point
 // number with a mantissa in the given conversion base (the exponent is always a
 // decimal number), or a string representing an infinite value.
 //

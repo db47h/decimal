@@ -11,14 +11,14 @@ import (
 const debugDecimal = true // enable for debugging
 
 // DefaultDecimalPrec is the default minimum precision used when creating a new
-// Decimal from a *big.Int, uint64, int64, or string. An uint64 requires up to
-// 20 digits, which amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits
-// Words (32 bits). Forcing the precision to 20 digits would result in 18 or 7
-// unused digits. Using 34 instead gives a higher precision at no performance or
-// memory cost on 64 bits platforms (but one more Word on 32 bits) and gives
-// room for 2 to 4 extra digits of extra precision for internal computations at
-// no added performance or memory cost. Also 34 digits matches the precision of
-// IEEE-754 decimal128.
+// Decimal from a *big.Int, *big.Rat, uint64, int64, or string. An uint64
+// requires up to 20 digits, which amounts to 2 x 19-digits Words (64 bits) or 3
+// x 9-digits Words (32 bits). Forcing the precision to 20 digits would result
+// in 18 or 7 unused digits. Using 34 instead gives a higher precision at no
+// performance or memory cost on 64 bits platforms (but one more Word on 32
+// bits) and gives room for 2 to 4 extra digits of extra precision for internal
+// computations at no added performance or memory cost. Also 34 digits matches
+// the precision of IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
 
 var decimalZero Decimal
@@ -892,7 +892,7 @@ func (z *Decimal) Set(x *Decimal) *Decimal {
 // Conversion is performed using z's precision and rounding mode. Caveat: as a
 // result this may lead to inconsistencies between the ouputs of x.Text and
 // z.Text. To preserve this property, the conversion should be done using x's
-// precision and rounding mode ToNearestEven:
+// precision and rounding mode set to ToNearestEven:
 //
 //  p, m := z.Prec(), z.Mode()
 //  z.SetPrec(0).SetMode(ToNearestEven).SetFloat(x)
@@ -942,7 +942,7 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 // SetFloat64 sets z to the (possibly rounded) value of x and returns z. If z's
 // precision is 0, it is changed to 17 (and rounding will have no effect).
 // SetFloat64 panics with ErrNaN if x is a NaN. Conversion is performed using
-// z's precision and rounding mode. See caveat in (*Decimal).Float.
+// z's precision and rounding mode. See caveat in (*Decimal).SetFloat.
 func (z *Decimal) SetFloat64(x float64) *Decimal {
 	if z.prec == 0 {
 		z.prec = 17
@@ -1461,7 +1461,7 @@ func (z *Decimal) umul(x, y *Decimal) {
 
 	// Note: This is doing too much work if the precision
 	// of z is less than the sum of the precisions of x
-	// and y which is often the case (e.g., if all floats
+	// and y which is often the case (e.g., if all Decimals
 	// have the same precision).
 	// TODO(db47h) Optimize this for the common case.
 

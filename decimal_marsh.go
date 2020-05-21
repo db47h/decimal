@@ -15,7 +15,7 @@ import (
 const decimalGobVersion byte = 1
 
 // GobEncode implements the gob.GobEncoder interface.
-// The Float value and all its attributes (precision,
+// The Decimal value and all its attributes (precision,
 // rounding mode, accuracy) are marshaled.
 func (x *Decimal) GobEncode() ([]byte, error) {
 	if x == nil {
@@ -114,7 +114,7 @@ func (z *Decimal) UnmarshalText(text []byte) error {
 	// TODO(db47h): get rid of the []byte/string conversion
 	_, _, err := z.Parse(string(text), 0)
 	if err != nil {
-		err = fmt.Errorf("math/big: cannot unmarshal %q into a *big.Float (%v)", text, err)
+		err = fmt.Errorf("decimal: cannot unmarshal %q into a *decimal.Decimal (%v)", text, err)
 	}
 	return err
 }

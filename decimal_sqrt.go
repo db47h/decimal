@@ -111,7 +111,7 @@ func (z *Decimal) sqrtInverse(x *Decimal) {
 	u := newDecimal(z.prec)
 	v := newDecimal(z.prec)
 	for prec := z.prec + 2; t.prec < prec; {
-		// be less agressive than big.Float in precision increase
+		// be more conservative than big.Float in precision increase
 		// |√z - t| < 10**(-2*t.prec + 2) <= 10**-prec
 		t.prec = t.prec*2 - 2
 		u.prec = t.prec

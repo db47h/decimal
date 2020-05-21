@@ -9,36 +9,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 )
-
-func dtoa(x dec, base int) []byte {
-	// special cases
-	switch {
-	case base < 2:
-		panic("illegal base")
-	case len(x) == 0:
-		return []byte("0")
-	}
-
-	// allocate buffer for conversion
-	i := int(float64(x.digits())/math.Log10(float64(base))) + 1 // +1: round up
-	s := make([]byte, i)
-
-	// don't destroy x
-	q := dec(nil).set(x)
-
-	// convert
-	for len(q) > 0 {
-		i--
-		var r Word
-		q, r = q.divW(q, Word(base))
-		s[i] = digits[r]
-	}
-
-	return s[i:]
-}
 
 var decStrTests = []struct {
 	x dec    // dec value to be converted
@@ -349,11 +323,12 @@ func BenchmarkDecScan(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
 				b.StopTimer()
-				var z dec
-				z = z.expWW(x, y)
-
+				i := big.NewInt(int64(x))
+				i.Exp(i, big.NewInt(int64(y)), nil)
+				z := dec(nil).make(int(math.Ceil(float64(i.BitLen()) * log10_2)))
+				z = z.setNat(i.Bits())
 				s := z.utoa(base)
-				if t := dtoa(z, base); !bytes.Equal(s, t) {
+				if t := []byte(i.Text(base)); !bytes.Equal(s, t) {
 					b.Fatalf("scanning: got %s; want %s", s, t)
 				}
 				b.StartTimer()
@@ -378,8 +353,10 @@ func BenchmarkDecString(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%d/Base%d", y, base), func(b *testing.B) {
 				b.StopTimer()
-				var z dec
-				z = z.expWW(x, y)
+				i := big.NewInt(int64(x))
+				i.Exp(i, big.NewInt(int64(y)), nil)
+				z := dec(nil).make(int(math.Ceil(float64(i.BitLen()) * log10_2)))
+				z = z.setNat(i.Bits())
 				z.utoa(base) // warm divisor cache
 				b.StartTimer()
 
@@ -443,9 +420,12 @@ func TestDecStringPowers(t *testing.T) {
 			if testing.Short() && p > 10 {
 				break
 			}
-			x := dec(nil).expWW(Word(b), p)
+			i := big.NewInt(int64(b))
+			i.Exp(i, big.NewInt(int64(p)), nil)
+			x := dec(nil).make(int(math.Ceil(float64(i.BitLen()) * log10_2)))
+			x = x.setNat(i.Bits())
 			xs := x.utoa(b)
-			xs2 := dtoa(x, b)
+			xs2 := []byte(i.Text(b))
 			if !bytes.Equal(xs, xs2) {
 				t.Fatalf("failed at %d ** %d in base %d: %s != %s", b, p, b, xs, xs2)
 			}

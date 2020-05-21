@@ -8,6 +8,8 @@ import (
 	"math/big"
 )
 
+const debugDecimal = true // enable for debugging
+
 // DefaultDecimalPrec is the default minimum precision used when creating a new
 // Decimal from a *big.Int, uint64, int64, or string. An uint64 requires up to
 // 20 digits, which amounts to 2 x 19-digits Words (64 bits) or 3 x 9-digits
@@ -393,67 +395,49 @@ func (x *Decimal) Float(z *big.Float) *big.Float {
 	if z == nil {
 		z = new(big.Float).SetMode(big.RoundingMode(x.mode))
 	}
-	p := uint64(z.Prec())
+	p := uint(z.Prec())
 	if p == 0 {
-		p = uint64(max(int(math.Ceil(float64(x.prec)*log2_10)), 64))
-		z.SetPrec(0).SetPrec(uint(p))
+		p = uint(max(int(math.Ceil(float64(x.prec)*log2_10)), 64))
 	}
+
+	// clear z
+	z.SetPrec(0)
 
 	switch x.form {
 	case zero:
-		return z.SetPrec(0).SetPrec(uint(p))
+		return z.SetPrec(p)
 	case inf:
-		return z.SetInf(x.neg)
+		return z.SetInf(x.neg).SetPrec(p)
 	}
+
+	// increase precision
+	z.SetPrec(p + 1)
 
 	// big.Float has no SetBits. Need to use a temp Int.
 	var i big.Int
 	i.SetBits(decToNat(nil, x.mant))
 
-	exp := int64(x.exp) - int64(len(x.mant)*_DW)
+	m := len(x.mant) * _DW
+	exp := int64(x.exp) - int64(m)
 	z = z.SetInt(&i)
+	// z = x·2**(m - x.exp)·5**(m - x.exp)
 
-	// now multiply/divide by 10**exp
+	// normalize mantissa and apply 2 exponent
+	// done in two steps since SetMantExponent takes an int.
+	z.SetMantExp(z, -m)         // z = x·2**(-x.exp)·5**(m - x.exp)
+	z.SetMantExp(z, int(x.exp)) // z = x·5**(m - x.exp)
+
+	// now multiply/divide by 5**exp
 	if exp != 0 {
 		t := new(big.Float).SetPrec(uint(p))
 		if exp < 0 {
-			if exp < MinExp {
-				// exponent overflow, convert mantissa first
-				l := uint64(len(x.mant) * _DW)
-				z.Quo(z, pow10Float(t, l))
-				exp += int64(l)
-			}
-			z.Quo(z, pow10Float(t, uint64(-exp)))
+			z.Quo(z, floatPow5(t, uint64(-exp)))
 		} else {
-			z.Mul(z, pow10Float(t, uint64(exp)))
+			z.Mul(z, floatPow5(t, uint64(exp)))
 		}
 	}
-	return z
-}
-
-// pow10 sets z to 10**n and returns z.
-// n must not be negative.
-func pow10Float(z *big.Float, n uint64) *big.Float {
-	const m = uint64(len(pow10tab) - 1)
-	if n <= m {
-		return z.SetUint64(pow10tab[n])
-	}
-	// n > m
-
-	z.SetUint64(pow10tab[m])
-	n -= m
-
-	f := new(big.Float).SetPrec(z.Prec() + _W).SetUint64(10)
-
-	for n > 0 {
-		if n&1 != 0 {
-			z.Mul(z, f)
-		}
-		f.Mul(f, f)
-		n >>= 1
-	}
-
-	return z
+	// round
+	return z.SetPrec(p)
 }
 
 // Float32 returns the float32 value nearest to x. If x is too small to be
@@ -886,6 +870,8 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 	z.SetInt(i)
 	exp2 -= int64(fprec)
 	if exp2 != 0 {
+		// multiply / divide by 2**exp with increased precision
+		z.prec += 1
 		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
 			if exp2 < MinExp {
@@ -898,6 +884,7 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 		} else {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
+		z.prec -= 1
 	}
 	z.round(0)
 	return z
@@ -930,17 +917,17 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 	exp2 -= 64
 	z.mant, z.exp = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
 	dnorm(z.mant)
-	// multiply / divide by 2**exp with increased precision
-	z.prec += 1
 	if exp2 != 0 {
+		// multiply / divide by 2**exp with increased precision
+		z.prec += 1
 		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
 			z = z.Quo(z, t.pow2(uint64(-exp2)))
 		} else {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
+		z.prec -= 1
 	}
-	z.prec -= 1
 	z.round(0)
 	return z
 }

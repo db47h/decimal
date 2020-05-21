@@ -6,8 +6,6 @@ import (
 	"sync"
 )
 
-const debugDecimal = true
-
 // dec is an unsigned integer x of the form
 //
 //   x = x[n-1]*_BD^(n-1) + x[n-2]*_BD^(n-2) + ... + x[1]*_BD + x[0]

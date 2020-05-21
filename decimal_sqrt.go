@@ -1,14 +1,17 @@
 package decimal
 
+import (
+	"fmt"
+	"math"
+)
+
 // Copyright 2017 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import "math"
-
 var (
-	oneHalf = NewDecimal(0.5) // will be exact
-	three   = NewDecimal(3.0)
+	oneHalf = NewDecimal(0.5) // must be exact
+	three   = NewDecimal(3.0) // must be exact
 )
 
 // Sqrt sets z to the rounded square root of x, and returns it.
@@ -64,10 +67,40 @@ func (z *Decimal) Sqrt(x *Decimal) *Decimal {
 
 	// Unlike with big.Float, solving x² - z = 0 directly is faster only for
 	// very small precisions (<_DW/2).
+	//
+	// Solve 1/x² - z = 0 instead.
+	z.sqrtInverse(z)
+
+	// restore precision and re-attach halved exponent
+	return z.SetMantExp(z, b/2)
+}
+
+// Compute √x (to z.prec precision) by solving
+//   1/t² - x = 0
+// for t (using Newton's method), and then inverting.
+func (z *Decimal) sqrtInverse(x *Decimal) {
+	if debugDecimal {
+		if oneHalf.acc != Exact {
+			panic(fmt.Sprintf("oneHalf is inexact (%v): %g", oneHalf.acc, oneHalf))
+		}
+		if three.acc != Exact {
+			panic(fmt.Sprintf("three is inexact (%v): %g", three.acc, three))
+		}
+	}
 
 	// Compute √x (to z.prec precision) by solving
 	//   1/t² - x = 0
 	// for t (using Newton's method), and then inverting.
+
+	// Compute initial guess for 1/√x
+	// xf needs only be "close enough", use a fast Decimal->Float64 conversion
+	xf := float64(x.mant[len(x.mant)-1]/10) / float64(pow10(uint(_DW-1-x.exp)))
+	t := newDecimal(z.prec).SetFloat64(1 / math.Sqrt(xf))
+	// t.prec = min(_DW, 17)
+	if _W == 32 {
+		t.prec = _DW
+	}
+	// t = initial guess for 1/√x
 
 	// let
 	//   f(t) = 1/t² - x
@@ -75,29 +108,24 @@ func (z *Decimal) Sqrt(x *Decimal) *Decimal {
 	//   g(t) = f(t)/f'(t) = -½t(1 - xt²)
 	// and the next guess is given by
 	//   t2 = t - g(t) = ½t(3 - xt²)
-
-	u := newDecimal(prec)
-	v := newDecimal(prec)
-	xf, _ := x.Float64()
-	sqi := newDecimal(prec)
-	sqi.SetFloat64(1 / math.Sqrt(xf))
-	for prec := prec + _DW; sqi.prec < prec; {
-		sqi.prec *= 2
-		u.prec = sqi.prec
-		v.prec = sqi.prec
-		u.Mul(sqi, sqi)     //   u = sqi²
-		u.Mul(x, u)         //     = x.sqi²
-		v.Sub(three, u)     //   v = 3 - x.sqi²
-		u.Mul(sqi, v)       //   u = sqi(3 - x.sqi²)
-		sqi.Mul(u, oneHalf) // sqi = ½sqi(3 - x.sqi²)
+	u := newDecimal(z.prec)
+	v := newDecimal(z.prec)
+	for prec := z.prec + 2; t.prec < prec; {
+		// be less agressive than big.Float in precision increase
+		// |√z - t| < 10**(-2*t.prec + 2) <= 10**-prec
+		t.prec = t.prec*2 - 2
+		u.prec = t.prec
+		v.prec = t.prec
+		u.Mul(t, t)       // u = t²
+		u.Mul(x, u)       //   = x.t²
+		v.Sub(three, u)   // v = 3 - x.t²
+		u.Mul(t, v)       // u = t(3 - x.t²)
+		t.Mul(u, oneHalf) // t = ½t(3 - x.t²)
 	}
-	// sqi = 1/√x
+	// t = 1/√x
 
 	// x/√x = √x
-	z.Mul(x, sqi)
-
-	// re-attach halved exponent
-	return z.SetMantExp(z, b/2)
+	z.Mul(z, t)
 }
 
 // newDecimal returns a new *Decimal with space for twice the given

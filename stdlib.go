@@ -1,4 +1,8 @@
-// This file mirrors types and constants from math/big.
+// Copyright 2020 Denis Bernard <db047h@gmail.com>. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This file mirrors constants, types and some internal functions from math/big.
 
 package decimal
 

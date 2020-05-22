@@ -10,6 +10,20 @@ import (
 	"sync"
 )
 
+// The following thresholds are hugely different from their counterparts
+// in math/big.
+
+// Operands that are shorter than decKaratsubaThreshold are multiplied using
+// "grade school" multiplication; for longer operands the Karatsuba algorithm
+// is used.
+var decKaratsubaThreshold = 30 // computed by calibrate_test.go
+
+// Operands that are shorter than decBasicSqrThreshold are squared using
+// "grade school" multiplication; for operands longer than karatsubaSqrThreshold
+// we use the Karatsuba algorithm optimized for x == y.
+var decBasicSqrThreshold = 10     // computed by calibrate_test.go
+var decKaratsubaSqrThreshold = 50 // computed by calibrate_test.go
+
 // dec is an unsigned integer x of the form
 //
 //   x = x[n-1]*_BD^(n-1) + x[n-2]*_BD^(n-2) + ... + x[1]*_BD + x[0]
@@ -569,12 +583,12 @@ func (z dec) sqr(x dec) dec {
 		z = nil // z is an alias for x - cannot reuse
 	}
 
-	if n < basicSqrThreshold {
+	if n < decBasicSqrThreshold {
 		z = z.make(2 * n)
 		decBasicMul(z, x, x)
 		return z.norm()
 	}
-	if n < karatsubaSqrThreshold {
+	if n < decKaratsubaSqrThreshold {
 		z = z.make(2 * n)
 		decBasicSqr(z, x)
 		return z.norm()
@@ -584,7 +598,7 @@ func (z dec) sqr(x dec) dec {
 
 	// z = (x1*b + x0)^2 = x1^2*b^2 + 2*x1*x0*b + x0^2
 
-	k := karatsubaLen(n, karatsubaSqrThreshold)
+	k := karatsubaLen(n, decKaratsubaSqrThreshold)
 
 	x0 := x[0:k]
 	z = z.make(max(6*k, 2*n))
@@ -639,7 +653,7 @@ func decBasicSqr(z, x dec) {
 func decKaratsubaSqr(z, x dec) {
 	n := len(x)
 
-	if n&1 != 0 || n < karatsubaSqrThreshold || n < 2 {
+	if n&1 != 0 || n < decKaratsubaSqrThreshold || n < 2 {
 		decBasicSqr(z[:2*n], x)
 		return
 	}
@@ -698,7 +712,7 @@ func (z dec) mul(x, y dec) dec {
 	}
 
 	// use basic multiplication if the numbers are small
-	if n < karatsubaThreshold {
+	if n < decKaratsubaThreshold {
 		z = z.make(m + n)
 		decBasicMul(z, x, y)
 		return z.norm()
@@ -711,7 +725,7 @@ func (z dec) mul(x, y dec) dec {
 	//   y = yh*b + y0  (0 <= y0 < b)
 	//   b = 10**(_DW*k)  ("base" of digits xi, yi)
 	//
-	k := karatsubaLen(n, karatsubaThreshold)
+	k := karatsubaLen(n, decKaratsubaThreshold)
 	// k <= n
 
 	// // multiply x0 and y0 via Karatsuba
@@ -959,7 +973,7 @@ func decKaratsuba(z, x, y dec) {
 	// Switch to basic multiplication if numbers are odd or small.
 	// (n is always even if karatsubaThreshold is even, but be
 	// conservative)
-	if n&1 != 0 || n < karatsubaThreshold || n < 2 {
+	if n&1 != 0 || n < decKaratsubaThreshold || n < 2 {
 		decBasicMul(z, x, y)
 		return
 	}

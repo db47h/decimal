@@ -9,7 +9,9 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -391,201 +393,198 @@ func TestDecimalIsInt(t *testing.T) {
 	}
 }
 
-// func fromBinary(s string) int64 {
-// 	x, err := strconv.ParseInt(s, 2, 64)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return x
-// }
+func testDecimalRound(t *testing.T, x, r int64, prec uint, mode RoundingMode) {
+	// verify test data
+	var ok bool
+	switch mode {
+	case ToNearestEven, ToNearestAway:
+		ok = true // nothing to do for now
+	case ToZero:
+		if x < 0 {
+			ok = r >= x
+		} else {
+			ok = r <= x
+		}
+	case AwayFromZero:
+		if x < 0 {
+			ok = r <= x
+		} else {
+			ok = r >= x
+		}
+	case ToNegativeInf:
+		ok = r <= x
+	case ToPositiveInf:
+		ok = r >= x
+	default:
+		panic("unreachable")
+	}
+	if !ok {
+		t.Fatalf("incorrect test data for prec = %d, %s: x = %d, r = %d", prec, mode, x, r)
+	}
 
-// func toBinary(x int64) string {
-// 	return strconv.FormatInt(x, 2)
-// }
+	// compute expected accuracy
+	a := Exact
+	switch {
+	case r < x:
+		a = Below
+	case r > x:
+		a = Above
+	}
 
-// func testFloatRound(t *testing.T, x, r int64, prec uint, mode RoundingMode) {
-// 	// verify test data
-// 	var ok bool
-// 	switch mode {
-// 	case ToNearestEven, ToNearestAway:
-// 		ok = true // nothing to do for now
-// 	case ToZero:
-// 		if x < 0 {
-// 			ok = r >= x
-// 		} else {
-// 			ok = r <= x
-// 		}
-// 	case AwayFromZero:
-// 		if x < 0 {
-// 			ok = r <= x
-// 		} else {
-// 			ok = r >= x
-// 		}
-// 	case ToNegativeInf:
-// 		ok = r <= x
-// 	case ToPositiveInf:
-// 		ok = r >= x
-// 	default:
-// 		panic("unreachable")
-// 	}
-// 	if !ok {
-// 		t.Fatalf("incorrect test data for prec = %d, %s: x = %s, r = %s", prec, mode, toBinary(x), toBinary(r))
-// 	}
+	// round
+	f := new(Decimal).SetMode(mode).SetInt64(x).SetPrec(prec)
 
-// 	// compute expected accuracy
-// 	a := Exact
-// 	switch {
-// 	case r < x:
-// 		a = Below
-// 	case r > x:
-// 		a = Above
-// 	}
+	// check result
+	r1 := f.int64()
+	p1 := f.Prec()
+	a1 := f.Acc()
+	if r1 != r || p1 != prec || a1 != a {
+		t.Errorf("round %d (%d digits, %s) incorrect: got %d (%d digits, %s); want %d (%d digits, %s)",
+			x, prec, mode,
+			r1, p1, a1,
+			r, prec, a)
+		return
+	}
 
-// 	// round
-// 	f := new(Float).SetMode(mode).SetInt64(x).SetPrec(prec)
+	// g and f should be the same
+	// (rounding by SetPrec after SetInt64 using default precision
+	// should be the same as rounding by SetInt64 after setting the
+	// precision)
+	g := new(Decimal).SetMode(mode).SetPrec(prec).SetInt64(x)
+	if !alike(g, f) {
+		t.Errorf("round %d (%d digits, %s) not symmetric: got %d and %d; want %d",
+			x, prec, mode,
+			g.int64(),
+			r1,
+			r,
+		)
+		return
+	}
 
-// 	// check result
-// 	r1 := f.int64()
-// 	p1 := f.Prec()
-// 	a1 := f.Acc()
-// 	if r1 != r || p1 != prec || a1 != a {
-// 		t.Errorf("round %s (%d bits, %s) incorrect: got %s (%d bits, %s); want %s (%d bits, %s)",
-// 			toBinary(x), prec, mode,
-// 			toBinary(r1), p1, a1,
-// 			toBinary(r), prec, a)
-// 		return
-// 	}
+	// h and f should be the same
+	// (repeated rounding should be idempotent)
+	h := new(Decimal).SetMode(mode).SetPrec(prec).Set(f)
+	if !alike(h, f) {
+		t.Errorf("round %d (%d digits, %s) not idempotent: got %d and %d; want %d",
+			x, prec, mode,
+			h.int64(),
+			r1,
+			r,
+		)
+		return
+	}
+}
 
-// 	// g and f should be the same
-// 	// (rounding by SetPrec after SetInt64 using default precision
-// 	// should be the same as rounding by SetInt64 after setting the
-// 	// precision)
-// 	g := new(Float).SetMode(mode).SetPrec(prec).SetInt64(x)
-// 	if !alike(g, f) {
-// 		t.Errorf("round %s (%d bits, %s) not symmetric: got %s and %s; want %s",
-// 			toBinary(x), prec, mode,
-// 			toBinary(g.int64()),
-// 			toBinary(r1),
-// 			toBinary(r),
-// 		)
-// 		return
-// 	}
+func fromBase10(s string) int64 {
+	x, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return x
+}
 
-// 	// h and f should be the same
-// 	// (repeated rounding should be idempotent)
-// 	h := new(Float).SetMode(mode).SetPrec(prec).Set(f)
-// 	if !alike(h, f) {
-// 		t.Errorf("round %s (%d bits, %s) not idempotent: got %s and %s; want %s",
-// 			toBinary(x), prec, mode,
-// 			toBinary(h.int64()),
-// 			toBinary(r1),
-// 			toBinary(r),
-// 		)
-// 		return
-// 	}
-// }
+// TestDecimalRound tests basic rounding.
+func TestDecimalRound(t *testing.T) {
+	for _, test := range []struct {
+		prec                        uint
+		x, zero, neven, naway, away string // input, results rounded to prec bits
+	}{
+		{5, "5000", "5000", "5000", "5000", "5000"},
+		{5, "5005", "5005", "5005", "5005", "5005"},
+		{5, "5050", "5050", "5050", "5050", "5050"},
+		{5, "5055", "5055", "5055", "5055", "5055"},
+		{5, "5500", "5500", "5500", "5500", "5500"},
+		{5, "5505", "5505", "5505", "5505", "5505"},
+		{5, "5550", "5550", "5550", "5550", "5550"},
+		{5, "5555", "5555", "5555", "5555", "5555"},
 
-// // TestFloatRound tests basic rounding.
-// func TestFloatRound(t *testing.T) {
-// 	for _, test := range []struct {
-// 		prec                        uint
-// 		x, zero, neven, naway, away string // input, results rounded to prec bits
-// 	}{
-// 		{5, "1000", "1000", "1000", "1000", "1000"},
-// 		{5, "1001", "1001", "1001", "1001", "1001"},
-// 		{5, "1010", "1010", "1010", "1010", "1010"},
-// 		{5, "1011", "1011", "1011", "1011", "1011"},
-// 		{5, "1100", "1100", "1100", "1100", "1100"},
-// 		{5, "1101", "1101", "1101", "1101", "1101"},
-// 		{5, "1110", "1110", "1110", "1110", "1110"},
-// 		{5, "1111", "1111", "1111", "1111", "1111"},
+		{4, "5000", "5000", "5000", "5000", "5000"},
+		{4, "5005", "5005", "5005", "5005", "5005"},
+		{4, "5050", "5050", "5050", "5050", "5050"},
+		{4, "5055", "5055", "5055", "5055", "5055"},
+		{4, "5500", "5500", "5500", "5500", "5500"},
+		{4, "5505", "5505", "5505", "5505", "5505"},
+		{4, "5550", "5550", "5550", "5550", "5550"},
+		{4, "5555", "5555", "5555", "5555", "5555"},
 
-// 		{4, "1000", "1000", "1000", "1000", "1000"},
-// 		{4, "1001", "1001", "1001", "1001", "1001"},
-// 		{4, "1010", "1010", "1010", "1010", "1010"},
-// 		{4, "1011", "1011", "1011", "1011", "1011"},
-// 		{4, "1100", "1100", "1100", "1100", "1100"},
-// 		{4, "1101", "1101", "1101", "1101", "1101"},
-// 		{4, "1110", "1110", "1110", "1110", "1110"},
-// 		{4, "1111", "1111", "1111", "1111", "1111"},
+		{3, "5000", "5000", "5000", "5000", "5000"},
+		{3, "5005", "5000", "5000", "5010", "5010"},
+		{3, "5050", "5050", "5050", "5050", "5050"},
+		{3, "5055", "5050", "5060", "5060", "5060"},
+		{3, "5500", "5500", "5500", "5500", "5500"},
+		{3, "5505", "5500", "5500", "5510", "5510"},
+		{3, "5550", "5550", "5550", "5550", "5550"},
+		{3, "9995", "9990", "10000", "10000", "10000"},
 
-// 		{3, "1000", "1000", "1000", "1000", "1000"},
-// 		{3, "1001", "1000", "1000", "1010", "1010"},
-// 		{3, "1010", "1010", "1010", "1010", "1010"},
-// 		{3, "1011", "1010", "1100", "1100", "1100"},
-// 		{3, "1100", "1100", "1100", "1100", "1100"},
-// 		{3, "1101", "1100", "1100", "1110", "1110"},
-// 		{3, "1110", "1110", "1110", "1110", "1110"},
-// 		{3, "1111", "1110", "10000", "10000", "10000"},
+		{3, "5000005", "5000000", "5000000", "5000000", "5010000"},
+		{3, "5005005", "5000000", "5010000", "5010000", "5010000"},
+		{3, "5050005", "5050000", "5050000", "5050000", "5060000"},
+		{3, "5055005", "5050000", "5060000", "5060000", "5060000"},
+		{3, "5500005", "5500000", "5500000", "5500000", "5510000"},
+		{3, "5505005", "5500000", "5510000", "5510000", "5510000"},
+		{3, "9990005", "9990000", "9990000", "9990000", "10000000"},
+		{3, "9995005", "9990000", "10000000", "10000000", "10000000"},
 
-// 		{3, "1000001", "1000000", "1000000", "1000000", "1010000"},
-// 		{3, "1001001", "1000000", "1010000", "1010000", "1010000"},
-// 		{3, "1010001", "1010000", "1010000", "1010000", "1100000"},
-// 		{3, "1011001", "1010000", "1100000", "1100000", "1100000"},
-// 		{3, "1100001", "1100000", "1100000", "1100000", "1110000"},
-// 		{3, "1101001", "1100000", "1110000", "1110000", "1110000"},
-// 		{3, "1110001", "1110000", "1110000", "1110000", "10000000"},
-// 		{3, "1111001", "1110000", "10000000", "10000000", "10000000"},
+		{2, "5000", "5000", "5000", "5000", "5000"},
+		{2, "5005", "5000", "5000", "5000", "5100"},
+		{2, "5050", "5000", "5000", "5100", "5100"},
+		{2, "5055", "5000", "5100", "5100", "5100"},
+		{2, "5500", "5500", "5500", "5500", "5500"},
+		{2, "9905", "9900", "9900", "9900", "10000"},
+		{2, "9950", "9900", "10000", "10000", "10000"},
+		{2, "9955", "9900", "10000", "10000", "10000"},
 
-// 		{2, "1000", "1000", "1000", "1000", "1000"},
-// 		{2, "1001", "1000", "1000", "1000", "1100"},
-// 		{2, "1010", "1000", "1000", "1100", "1100"},
-// 		{2, "1011", "1000", "1100", "1100", "1100"},
-// 		{2, "1100", "1100", "1100", "1100", "1100"},
-// 		{2, "1101", "1100", "1100", "1100", "10000"},
-// 		{2, "1110", "1100", "10000", "10000", "10000"},
-// 		{2, "1111", "1100", "10000", "10000", "10000"},
+		{2, "5000005", "5000000", "5000000", "5000000", "5100000"},
+		{2, "5005005", "5000000", "5000000", "5000000", "5100000"},
+		{2, "5050005", "5000000", "5100000", "5100000", "5100000"},
+		{2, "5055005", "5000000", "5100000", "5100000", "5100000"},
+		{2, "9900005", "9900000", "9900000", "9900000", "10000000"},
+		{2, "9905005", "9900000", "9900000", "9900000", "10000000"},
+		{2, "9950005", "9900000", "10000000", "10000000", "10000000"},
+		{2, "9955005", "9900000", "10000000", "10000000", "10000000"},
 
-// 		{2, "1000001", "1000000", "1000000", "1000000", "1100000"},
-// 		{2, "1001001", "1000000", "1000000", "1000000", "1100000"},
-// 		{2, "1010001", "1000000", "1100000", "1100000", "1100000"},
-// 		{2, "1011001", "1000000", "1100000", "1100000", "1100000"},
-// 		{2, "1100001", "1100000", "1100000", "1100000", "10000000"},
-// 		{2, "1101001", "1100000", "1100000", "1100000", "10000000"},
-// 		{2, "1110001", "1100000", "10000000", "10000000", "10000000"},
-// 		{2, "1111001", "1100000", "10000000", "10000000", "10000000"},
+		{1, "9000", "9000", "9000", "9000", "9000"},
+		{1, "9005", "9000", "9000", "9000", "10000"},
+		{1, "9050", "9000", "9000", "9000", "10000"},
+		{1, "9055", "9000", "9000", "9000", "10000"},
+		{1, "9500", "9000", "10000", "10000", "10000"},
+		{1, "9505", "9000", "10000", "10000", "10000"},
+		{1, "9550", "9000", "10000", "10000", "10000"},
+		{1, "9555", "9000", "10000", "10000", "10000"},
 
-// 		{1, "1000", "1000", "1000", "1000", "1000"},
-// 		{1, "1001", "1000", "1000", "1000", "10000"},
-// 		{1, "1010", "1000", "1000", "1000", "10000"},
-// 		{1, "1011", "1000", "1000", "1000", "10000"},
-// 		{1, "1100", "1000", "10000", "10000", "10000"},
-// 		{1, "1101", "1000", "10000", "10000", "10000"},
-// 		{1, "1110", "1000", "10000", "10000", "10000"},
-// 		{1, "1111", "1000", "10000", "10000", "10000"},
+		{1, "9000005", "9000000", "9000000", "9000000", "10000000"},
+		{1, "9005005", "9000000", "9000000", "9000000", "10000000"},
+		{1, "9050005", "9000000", "9000000", "9000000", "10000000"},
+		{1, "9055005", "9000000", "9000000", "9000000", "10000000"},
+		{1, "9500005", "9000000", "10000000", "10000000", "10000000"},
+		{1, "9505005", "9000000", "10000000", "10000000", "10000000"},
+		{1, "9550005", "9000000", "10000000", "10000000", "10000000"},
+		{1, "9555005", "9000000", "10000000", "10000000", "10000000"},
+	} {
+		x := fromBase10(test.x)
+		z := fromBase10(test.zero)
+		e := fromBase10(test.neven)
+		n := fromBase10(test.naway)
+		a := fromBase10(test.away)
+		prec := test.prec
 
-// 		{1, "1000001", "1000000", "1000000", "1000000", "10000000"},
-// 		{1, "1001001", "1000000", "1000000", "1000000", "10000000"},
-// 		{1, "1010001", "1000000", "1000000", "1000000", "10000000"},
-// 		{1, "1011001", "1000000", "1000000", "1000000", "10000000"},
-// 		{1, "1100001", "1000000", "10000000", "10000000", "10000000"},
-// 		{1, "1101001", "1000000", "10000000", "10000000", "10000000"},
-// 		{1, "1110001", "1000000", "10000000", "10000000", "10000000"},
-// 		{1, "1111001", "1000000", "10000000", "10000000", "10000000"},
-// 	} {
-// 		x := fromBinary(test.x)
-// 		z := fromBinary(test.zero)
-// 		e := fromBinary(test.neven)
-// 		n := fromBinary(test.naway)
-// 		a := fromBinary(test.away)
-// 		prec := test.prec
+		testDecimalRound(t, x, z, prec, ToZero)
+		testDecimalRound(t, x, e, prec, ToNearestEven)
+		testDecimalRound(t, x, n, prec, ToNearestAway)
+		testDecimalRound(t, x, a, prec, AwayFromZero)
 
-// 		testFloatRound(t, x, z, prec, ToZero)
-// 		testFloatRound(t, x, e, prec, ToNearestEven)
-// 		testFloatRound(t, x, n, prec, ToNearestAway)
-// 		testFloatRound(t, x, a, prec, AwayFromZero)
+		testDecimalRound(t, x, z, prec, ToNegativeInf)
+		testDecimalRound(t, x, a, prec, ToPositiveInf)
 
-// 		testFloatRound(t, x, z, prec, ToNegativeInf)
-// 		testFloatRound(t, x, a, prec, ToPositiveInf)
+		testDecimalRound(t, -x, -a, prec, ToNegativeInf)
+		testDecimalRound(t, -x, -z, prec, ToPositiveInf)
+	}
+}
 
-// 		testFloatRound(t, -x, -a, prec, ToNegativeInf)
-// 		testFloatRound(t, -x, -z, prec, ToPositiveInf)
-// 	}
-// }
-
-// // TestFloatRound24 tests that rounding a float64 to 24 bits
-// // matches IEEE-754 rounding to nearest when converting a
-// // float64 to a float32 (excluding denormal numbers).
+// TestFloatRound24 tests that rounding a float64 to 24 bits
+// matches IEEE-754 rounding to nearest when converting a
+// float64 to a float32 (excluding denormal numbers).
+// TODO(db47h): implement this for decimal64/128
 // func TestFloatRound24(t *testing.T) {
 // 	const x0 = 1<<26 - 0x10 // 11...110000 (26 bits)
 // 	for d := 0; d <= 0x10; d++ {
@@ -599,678 +598,669 @@ func TestDecimalIsInt(t *testing.T) {
 // 	}
 // }
 
-// func TestFloatSetUint64(t *testing.T) {
-// 	for _, want := range []uint64{
-// 		0,
-// 		1,
-// 		2,
-// 		10,
-// 		100,
-// 		1<<32 - 1,
-// 		1 << 32,
-// 		1<<64 - 1,
-// 	} {
-// 		var f Float
-// 		f.SetUint64(want)
-// 		if got := f.uint64(); got != want {
-// 			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
-// 		}
-// 	}
+func TestDecimalSetUint64(t *testing.T) {
+	for _, want := range []uint64{
+		0,
+		1,
+		2,
+		10,
+		100,
+		1<<32 - 1,
+		1 << 32,
+		1<<64 - 1,
+	} {
+		var f Decimal
+		f.SetUint64(want)
+		if got := f.uint64(); got != want {
+			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+		}
+	}
 
-// 	// test basic rounding behavior (exhaustive rounding testing is done elsewhere)
-// 	const x uint64 = 0x8765432187654321 // 64 bits needed
-// 	for prec := uint(1); prec <= 64; prec++ {
-// 		f := new(Float).SetPrec(prec).SetMode(ToZero).SetUint64(x)
-// 		got := f.uint64()
-// 		want := x &^ (1<<(64-prec) - 1) // cut off (round to zero) low 64-prec bits
-// 		if got != want {
-// 			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
-// 		}
-// 	}
-// }
+	// test basic rounding behavior (exhaustive rounding testing is done elsewhere)
+	const x uint64 = 0x8765432187654321 // 64 bits needed
+	mp := decDigits64(uint64(x))
+	for prec := uint(1); prec <= mp; prec++ {
+		f := new(Decimal).SetPrec(prec).SetMode(ToZero).SetUint64(x)
+		got := f.uint64()
+		want := x - x%uint64(pow10(mp-prec)) // cut off (round to zero) low prec digits
+		if got != want {
+			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+		}
+	}
+}
 
-// func TestFloatSetInt64(t *testing.T) {
-// 	for _, want := range []int64{
-// 		0,
-// 		1,
-// 		2,
-// 		10,
-// 		100,
-// 		1<<32 - 1,
-// 		1 << 32,
-// 		1<<63 - 1,
-// 	} {
-// 		for i := range [2]int{} {
-// 			if i&1 != 0 {
-// 				want = -want
-// 			}
-// 			var f Float
-// 			f.SetInt64(want)
-// 			if got := f.int64(); got != want {
-// 				t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
-// 			}
-// 		}
-// 	}
+func TestDecimalSetInt64(t *testing.T) {
+	for _, want := range []int64{
+		0,
+		1,
+		2,
+		10,
+		100,
+		1<<32 - 1,
+		1 << 32,
+		1<<63 - 1,
+	} {
+		for i := range [2]int{} {
+			if i&1 != 0 {
+				want = -want
+			}
+			var f Decimal
+			f.SetInt64(want)
+			if got := f.int64(); got != want {
+				t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+			}
+		}
+	}
 
-// 	// test basic rounding behavior (exhaustive rounding testing is done elsewhere)
-// 	const x int64 = 0x7654321076543210 // 63 bits needed
-// 	for prec := uint(1); prec <= 63; prec++ {
-// 		f := new(Float).SetPrec(prec).SetMode(ToZero).SetInt64(x)
-// 		got := f.int64()
-// 		want := x &^ (1<<(63-prec) - 1) // cut off (round to zero) low 63-prec bits
-// 		if got != want {
-// 			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
-// 		}
-// 	}
-// }
+	// test basic rounding behavior (exhaustive rounding testing is done elsewhere)
+	const x int64 = 0x7654321076543210 // 63 bits needed
+	mp := decDigits64(uint64(x))
+	for prec := uint(1); prec <= mp; prec++ {
+		f := new(Decimal).SetPrec(prec).SetMode(ToZero).SetInt64(x)
+		got := f.int64()
+		want := x - x%int64(pow10(mp-prec)) // cut off (round to zero) low prec digits
+		if got != want {
+			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+		}
+	}
+}
 
-// func TestFloatSetFloat64(t *testing.T) {
-// 	for _, want := range []float64{
-// 		0,
-// 		1,
-// 		2,
-// 		12345,
-// 		1e10,
-// 		1e100,
-// 		3.14159265e10,
-// 		2.718281828e-123,
-// 		1.0 / 3,
-// 		math.MaxFloat32,
-// 		math.MaxFloat64,
-// 		math.SmallestNonzeroFloat32,
-// 		math.SmallestNonzeroFloat64,
-// 		math.Inf(-1),
-// 		math.Inf(0),
-// 		-math.Inf(1),
-// 	} {
-// 		for i := range [2]int{} {
-// 			if i&1 != 0 {
-// 				want = -want
-// 			}
-// 			var f Float
-// 			f.SetFloat64(want)
-// 			if got, acc := f.Float64(); got != want || acc != Exact {
-// 				t.Errorf("got %g (%s, %s); want %g (Exact)", got, f.Text('p', 0), acc, want)
-// 			}
-// 		}
-// 	}
+func TestDecimalSetFloat64(t *testing.T) {
+	for _, want := range []float64{
+		0,
+		1,
+		2,
+		12345,
+		1e10,
+		1e100,
+		3.14159265e10,
+		2.718281828e-123,
+		1.0 / 3,
+		1.1,
+		math.MaxFloat32,
+		math.MaxFloat64,
+		math.SmallestNonzeroFloat32,
+		math.SmallestNonzeroFloat64,
+		math.Inf(-1),
+		math.Inf(0),
+		-math.Inf(1),
+	} {
+		for i := range [2]int{} {
+			if i&1 != 0 {
+				want = -want
+			}
+			var f Decimal
+			f.SetFloat64(want)
+			if got, _ := f.Float64(); got != want {
+				t.Errorf("got %g (%s); want %g", got, f.Text('p', 0), want)
+			}
+		}
+	}
 
-// 	// test basic rounding behavior (exhaustive rounding testing is done elsewhere)
-// 	const x uint64 = 0x8765432143218 // 53 bits needed
-// 	for prec := uint(1); prec <= 52; prec++ {
-// 		f := new(Float).SetPrec(prec).SetMode(ToZero).SetFloat64(float64(x))
-// 		got, _ := f.Float64()
-// 		want := float64(x &^ (1<<(52-prec) - 1)) // cut off (round to zero) low 53-prec bits
-// 		if got != want {
-// 			t.Errorf("got %g (%s); want %g", got, f.Text('p', 0), want)
-// 		}
-// 	}
+	// test NaN
+	defer func() {
+		if p, ok := recover().(ErrNaN); !ok {
+			t.Errorf("got %v; want ErrNaN panic", p)
+		}
+	}()
+	var f Decimal
+	f.SetFloat64(math.NaN())
+	// should not reach here
+	t.Errorf("got %s; want ErrNaN panic", f.Text('p', 0))
+}
 
-// 	// test NaN
-// 	defer func() {
-// 		if p, ok := recover().(ErrNaN); !ok {
-// 			t.Errorf("got %v; want ErrNaN panic", p)
-// 		}
-// 	}()
-// 	var f Float
-// 	f.SetFloat64(math.NaN())
-// 	// should not reach here
-// 	t.Errorf("got %s; want ErrNaN panic", f.Text('p', 0))
-// }
+func TestDecimalSetInt(t *testing.T) {
+	for _, want := range []string{
+		"0",
+		"1",
+		"-1",
+		"1234567890",
+		"123456789012345678901234567890",
+		"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
+	} {
+		var x big.Int
+		_, ok := x.SetString(want, 0)
+		if !ok {
+			t.Errorf("invalid integer %s", want)
+			continue
+		}
 
-// func TestFloatSetInt(t *testing.T) {
-// 	for _, want := range []string{
-// 		"0",
-// 		"1",
-// 		"-1",
-// 		"1234567890",
-// 		"123456789012345678901234567890",
-// 		"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
-// 	} {
-// 		var x Int
-// 		_, ok := x.SetString(want, 0)
-// 		if !ok {
-// 			t.Errorf("invalid integer %s", want)
-// 			continue
-// 		}
-// 		n := x.BitLen()
+		var f Decimal
+		f.SetInt(&x)
 
-// 		var f Float
-// 		f.SetInt(&x)
+		// check precision
+		n := len(strings.TrimRight(want, "0"))
+		if n < DefaultDecimalPrec {
+			n = DefaultDecimalPrec
+		}
+		if prec := f.Prec(); prec != uint(n) {
+			t.Errorf("%s: got prec = %d; want %d", want, prec, n)
+		}
 
-// 		// check precision
-// 		if n < 64 {
-// 			n = 64
-// 		}
-// 		if prec := f.Prec(); prec != uint(n) {
-// 			t.Errorf("got prec = %d; want %d", prec, n)
-// 		}
+		// check value
+		got := f.Text('g', 100)
+		if got != want {
+			t.Errorf("got %s (%s); want %s", got, f.Text('p', 0), want)
+		}
+	}
+}
 
-// 		// check value
-// 		got := f.Text('g', 100)
-// 		if got != want {
-// 			t.Errorf("got %s (%s); want %s", got, f.Text('p', 0), want)
-// 		}
-// 	}
+func TestDecimalSetRat(t *testing.T) {
+	for _, want := range []struct {
+		v string
+		p uint
+	}{
+		{"0", DefaultDecimalPrec},
+		{"1", DefaultDecimalPrec},
+		{"-1", DefaultDecimalPrec},
+		{"1234567890", DefaultDecimalPrec},
+		{"123456789012345678901234567890", DefaultDecimalPrec},
+		{"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", 89},
+		{"1.2", DefaultDecimalPrec},
+		{"3.14159265", DefaultDecimalPrec},
+		// TODO(db47h) expand
+	} {
+		var x big.Rat
+		_, ok := x.SetString(want.v)
+		if !ok {
+			t.Errorf("invalid fraction %s", want.v)
+			continue
+		}
 
-// 	// TODO(gri) test basic rounding behavior
-// }
+		var f1, f2 Decimal
+		f2.SetPrec(1000)
+		f1.SetRat(&x)
+		f2.SetRat(&x)
 
-// func TestFloatSetRat(t *testing.T) {
-// 	for _, want := range []string{
-// 		"0",
-// 		"1",
-// 		"-1",
-// 		"1234567890",
-// 		"123456789012345678901234567890",
-// 		"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
-// 		"1.2",
-// 		"3.14159265",
-// 		// TODO(gri) expand
-// 	} {
-// 		var x Rat
-// 		_, ok := x.SetString(want)
-// 		if !ok {
-// 			t.Errorf("invalid fraction %s", want)
-// 			continue
-// 		}
-// 		n := max(x.Num().BitLen(), x.Denom().BitLen())
+		// check precision when set automatically
+		if want.p < DefaultDecimalPrec {
+			want.p = DefaultDecimalPrec
+		}
+		if prec := f1.Prec(); prec != want.p {
+			t.Errorf("got prec = %d; want %d", prec, want.p)
+		}
 
-// 		var f1, f2 Float
-// 		f2.SetPrec(1000)
-// 		f1.SetRat(&x)
-// 		f2.SetRat(&x)
+		got := f2.Text('g', 100)
+		if got != want.v {
+			t.Errorf("got %s (%s); want %s", got, f2.Text('p', 0), want.v)
+		}
+	}
+}
 
-// 		// check precision when set automatically
-// 		if n < 64 {
-// 			n = 64
-// 		}
-// 		if prec := f1.Prec(); prec != uint(n) {
-// 			t.Errorf("got prec = %d; want %d", prec, n)
-// 		}
+func TestFloatSetInf(t *testing.T) {
+	var f Decimal
+	for _, test := range []struct {
+		signbit bool
+		prec    uint
+		want    string
+	}{
+		{false, 0, "+Inf"},
+		{true, 0, "-Inf"},
+		{false, 10, "+Inf"},
+		{true, 30, "-Inf"},
+	} {
+		x := f.SetPrec(test.prec).SetInf(test.signbit)
+		if got := x.String(); got != test.want || x.Prec() != test.prec {
+			t.Errorf("SetInf(%v) = %s (prec = %d); want %s (prec = %d)", test.signbit, got, x.Prec(), test.want, test.prec)
+		}
+	}
+}
 
-// 		got := f2.Text('g', 100)
-// 		if got != want {
-// 			t.Errorf("got %s (%s); want %s", got, f2.Text('p', 0), want)
-// 		}
-// 	}
-// }
+func TestDecimalUint64(t *testing.T) {
+	for _, test := range []struct {
+		x   string
+		out uint64
+		acc Accuracy
+	}{
+		{"-Inf", 0, Above},
+		{"-1", 0, Above},
+		{"-1e-1000", 0, Above},
+		{"-0", 0, Exact},
+		{"0", 0, Exact},
+		{"1e-1000", 0, Below},
+		{"1", 1, Exact},
+		{"1.000000000000000000001", 1, Below},
+		{"12345.0", 12345, Exact},
+		{"12345.000000000000000000001", 12345, Below},
+		{"18446744073709551615", 18446744073709551615, Exact},
+		{"18446744073709551615.000000000000000000001", math.MaxUint64, Below},
+		{"18446744073709551616", math.MaxUint64, Below},
+		{"1e10000", math.MaxUint64, Below},
+		{"+Inf", math.MaxUint64, Below},
+	} {
+		x := makeDecimal(test.x)
+		out, acc := x.Uint64()
+		if out != test.out || acc != test.acc {
+			t.Errorf("%s: got %d (%s); want %d (%s)", test.x, out, acc, test.out, test.acc)
+		}
+	}
+}
 
-// func TestFloatSetInf(t *testing.T) {
-// 	var f Float
-// 	for _, test := range []struct {
-// 		signbit bool
-// 		prec    uint
-// 		want    string
-// 	}{
-// 		{false, 0, "+Inf"},
-// 		{true, 0, "-Inf"},
-// 		{false, 10, "+Inf"},
-// 		{true, 30, "-Inf"},
-// 	} {
-// 		x := f.SetPrec(test.prec).SetInf(test.signbit)
-// 		if got := x.String(); got != test.want || x.Prec() != test.prec {
-// 			t.Errorf("SetInf(%v) = %s (prec = %d); want %s (prec = %d)", test.signbit, got, x.Prec(), test.want, test.prec)
-// 		}
-// 	}
-// }
+func TestDecimalInt64(t *testing.T) {
+	for _, test := range []struct {
+		x   string
+		out int64
+		acc Accuracy
+	}{
+		{"-Inf", math.MinInt64, Above},
+		{"-1e10000", math.MinInt64, Above},
+		{"-9223372036854775809", math.MinInt64, Above},
+		{"-9223372036854775808.000000000000000000001", math.MinInt64, Above},
+		{"-9223372036854775808", -9223372036854775808, Exact},
+		{"-9223372036854775807.000000000000000000001", -9223372036854775807, Above},
+		{"-9223372036854775807", -9223372036854775807, Exact},
+		{"-12345.000000000000000000001", -12345, Above},
+		{"-12345.0", -12345, Exact},
+		{"-1.000000000000000000001", -1, Above},
+		{"-1.5", -1, Above},
+		{"-1", -1, Exact},
+		{"-1e-1000", 0, Above},
+		{"0", 0, Exact},
+		{"1e-1000", 0, Below},
+		{"1", 1, Exact},
+		{"1.000000000000000000001", 1, Below},
+		{"1.5", 1, Below},
+		{"12345.0", 12345, Exact},
+		{"12345.000000000000000000001", 12345, Below},
+		{"9223372036854775807", 9223372036854775807, Exact},
+		{"9223372036854775807.000000000000000000001", math.MaxInt64, Below},
+		{"9223372036854775808", math.MaxInt64, Below},
+		{"1e10000", math.MaxInt64, Below},
+		{"+Inf", math.MaxInt64, Below},
+	} {
+		x := makeDecimal(test.x)
+		out, acc := x.Int64()
+		if out != test.out || acc != test.acc {
+			t.Errorf("%s: got %d (%s); want %d (%s)", test.x, out, acc, test.out, test.acc)
+		}
+	}
+}
 
-// func TestFloatUint64(t *testing.T) {
-// 	for _, test := range []struct {
-// 		x   string
-// 		out uint64
-// 		acc Accuracy
-// 	}{
-// 		{"-Inf", 0, Above},
-// 		{"-1", 0, Above},
-// 		{"-1e-1000", 0, Above},
-// 		{"-0", 0, Exact},
-// 		{"0", 0, Exact},
-// 		{"1e-1000", 0, Below},
-// 		{"1", 1, Exact},
-// 		{"1.000000000000000000001", 1, Below},
-// 		{"12345.0", 12345, Exact},
-// 		{"12345.000000000000000000001", 12345, Below},
-// 		{"18446744073709551615", 18446744073709551615, Exact},
-// 		{"18446744073709551615.000000000000000000001", math.MaxUint64, Below},
-// 		{"18446744073709551616", math.MaxUint64, Below},
-// 		{"1e10000", math.MaxUint64, Below},
-// 		{"+Inf", math.MaxUint64, Below},
-// 	} {
-// 		x := makeFloat(test.x)
-// 		out, acc := x.Uint64()
-// 		if out != test.out || acc != test.acc {
-// 			t.Errorf("%s: got %d (%s); want %d (%s)", test.x, out, acc, test.out, test.acc)
-// 		}
-// 	}
-// }
+func TestDecimalFloat32(t *testing.T) {
+	for _, test := range []struct {
+		x   string
+		out float32
+		acc Accuracy
+	}{
+		{"0", 0, Exact},
 
-// func TestFloatInt64(t *testing.T) {
-// 	for _, test := range []struct {
-// 		x   string
-// 		out int64
-// 		acc Accuracy
-// 	}{
-// 		{"-Inf", math.MinInt64, Above},
-// 		{"-1e10000", math.MinInt64, Above},
-// 		{"-9223372036854775809", math.MinInt64, Above},
-// 		{"-9223372036854775808.000000000000000000001", math.MinInt64, Above},
-// 		{"-9223372036854775808", -9223372036854775808, Exact},
-// 		{"-9223372036854775807.000000000000000000001", -9223372036854775807, Above},
-// 		{"-9223372036854775807", -9223372036854775807, Exact},
-// 		{"-12345.000000000000000000001", -12345, Above},
-// 		{"-12345.0", -12345, Exact},
-// 		{"-1.000000000000000000001", -1, Above},
-// 		{"-1.5", -1, Above},
-// 		{"-1", -1, Exact},
-// 		{"-1e-1000", 0, Above},
-// 		{"0", 0, Exact},
-// 		{"1e-1000", 0, Below},
-// 		{"1", 1, Exact},
-// 		{"1.000000000000000000001", 1, Below},
-// 		{"1.5", 1, Below},
-// 		{"12345.0", 12345, Exact},
-// 		{"12345.000000000000000000001", 12345, Below},
-// 		{"9223372036854775807", 9223372036854775807, Exact},
-// 		{"9223372036854775807.000000000000000000001", math.MaxInt64, Below},
-// 		{"9223372036854775808", math.MaxInt64, Below},
-// 		{"1e10000", math.MaxInt64, Below},
-// 		{"+Inf", math.MaxInt64, Below},
-// 	} {
-// 		x := makeFloat(test.x)
-// 		out, acc := x.Int64()
-// 		if out != test.out || acc != test.acc {
-// 			t.Errorf("%s: got %d (%s); want %d (%s)", test.x, out, acc, test.out, test.acc)
-// 		}
-// 	}
-// }
+		// underflow to zero
+		{"1e-1000", 0, Below},
+		{"0x0.000002p-127", 0, Below},
+		{"0x.0000010p-126", 0, Below},
 
-// func TestFloatFloat32(t *testing.T) {
-// 	for _, test := range []struct {
-// 		x   string
-// 		out float32
-// 		acc Accuracy
-// 	}{
-// 		{"0", 0, Exact},
+		// denormals
+		{"1.401298464e-45", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
+		{"0x.ffffff8p-149", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
+		{"0x.0000018p-126", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
+		{"0x.0000020p-126", math.SmallestNonzeroFloat32, Exact},
+		{"0x.8p-148", math.SmallestNonzeroFloat32, Exact},
+		{"1p-149", math.SmallestNonzeroFloat32, Exact},
+		{"0x.fffffep-126", math.Float32frombits(0x7fffff), Exact}, // largest denormal
 
-// 		// underflow to zero
-// 		{"1e-1000", 0, Below},
-// 		{"0x0.000002p-127", 0, Below},
-// 		{"0x.0000010p-126", 0, Below},
+		// special denormal cases (see issues 14553, 14651)
+		{"0x0.0000001p-126", math.Float32frombits(0x00000000), Below}, // underflow to zero
+		{"0x0.0000008p-126", math.Float32frombits(0x00000000), Below}, // underflow to zero
+		{"0x0.0000010p-126", math.Float32frombits(0x00000000), Below}, // rounded down to even
+		{"0x0.0000011p-126", math.Float32frombits(0x00000001), Above}, // rounded up to smallest denormal
+		{"0x0.0000018p-126", math.Float32frombits(0x00000001), Above}, // rounded up to smallest denormal
 
-// 		// denormals
-// 		{"1.401298464e-45", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
-// 		{"0x.ffffff8p-149", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
-// 		{"0x.0000018p-126", math.SmallestNonzeroFloat32, Above}, // rounded up to smallest denormal
-// 		{"0x.0000020p-126", math.SmallestNonzeroFloat32, Exact},
-// 		{"0x.8p-148", math.SmallestNonzeroFloat32, Exact},
-// 		{"1p-149", math.SmallestNonzeroFloat32, Exact},
-// 		{"0x.fffffep-126", math.Float32frombits(0x7fffff), Exact}, // largest denormal
+		{"0x1.0000000p-149", math.Float32frombits(0x00000001), Exact}, // smallest denormal
+		{"0x0.0000020p-126", math.Float32frombits(0x00000001), Exact}, // smallest denormal
+		{"0x0.fffffe0p-126", math.Float32frombits(0x007fffff), Exact}, // largest denormal
+		{"0x1.0000000p-126", math.Float32frombits(0x00800000), Exact}, // smallest normal
 
-// 		// special denormal cases (see issues 14553, 14651)
-// 		{"0x0.0000001p-126", math.Float32frombits(0x00000000), Below}, // underflow to zero
-// 		{"0x0.0000008p-126", math.Float32frombits(0x00000000), Below}, // underflow to zero
-// 		{"0x0.0000010p-126", math.Float32frombits(0x00000000), Below}, // rounded down to even
-// 		{"0x0.0000011p-126", math.Float32frombits(0x00000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.0000018p-126", math.Float32frombits(0x00000001), Above}, // rounded up to smallest denormal
+		{"0x0.8p-149", math.Float32frombits(0x000000000), Below}, // rounded down to even
+		{"0x0.9p-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
+		{"0x0.ap-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
+		{"0x0.bp-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
+		{"0x0.cp-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
 
-// 		{"0x1.0000000p-149", math.Float32frombits(0x00000001), Exact}, // smallest denormal
-// 		{"0x0.0000020p-126", math.Float32frombits(0x00000001), Exact}, // smallest denormal
-// 		{"0x0.fffffe0p-126", math.Float32frombits(0x007fffff), Exact}, // largest denormal
-// 		{"0x1.0000000p-126", math.Float32frombits(0x00800000), Exact}, // smallest normal
+		{"0x1.0p-149", math.Float32frombits(0x000000001), Exact}, // smallest denormal
+		{"0x1.7p-149", math.Float32frombits(0x000000001), Below},
+		{"0x1.8p-149", math.Float32frombits(0x000000002), Above},
+		{"0x1.9p-149", math.Float32frombits(0x000000002), Above},
 
-// 		{"0x0.8p-149", math.Float32frombits(0x000000000), Below}, // rounded down to even
-// 		{"0x0.9p-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.ap-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.bp-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.cp-149", math.Float32frombits(0x000000001), Above}, // rounded up to smallest denormal
+		{"0x2.0p-149", math.Float32frombits(0x000000002), Exact},
+		{"0x2.8p-149", math.Float32frombits(0x000000002), Below}, // rounded down to even
+		{"0x2.9p-149", math.Float32frombits(0x000000003), Above},
 
-// 		{"0x1.0p-149", math.Float32frombits(0x000000001), Exact}, // smallest denormal
-// 		{"0x1.7p-149", math.Float32frombits(0x000000001), Below},
-// 		{"0x1.8p-149", math.Float32frombits(0x000000002), Above},
-// 		{"0x1.9p-149", math.Float32frombits(0x000000002), Above},
+		{"0x3.0p-149", math.Float32frombits(0x000000003), Exact},
+		{"0x3.7p-149", math.Float32frombits(0x000000003), Below},
+		{"0x3.8p-149", math.Float32frombits(0x000000004), Above}, // rounded up to even
 
-// 		{"0x2.0p-149", math.Float32frombits(0x000000002), Exact},
-// 		{"0x2.8p-149", math.Float32frombits(0x000000002), Below}, // rounded down to even
-// 		{"0x2.9p-149", math.Float32frombits(0x000000003), Above},
+		{"0x4.0p-149", math.Float32frombits(0x000000004), Exact},
+		{"0x4.8p-149", math.Float32frombits(0x000000004), Below}, // rounded down to even
+		{"0x4.9p-149", math.Float32frombits(0x000000005), Above},
 
-// 		{"0x3.0p-149", math.Float32frombits(0x000000003), Exact},
-// 		{"0x3.7p-149", math.Float32frombits(0x000000003), Below},
-// 		{"0x3.8p-149", math.Float32frombits(0x000000004), Above}, // rounded up to even
+		// specific case from issue 14553
+		{"0x7.7p-149", math.Float32frombits(0x000000007), Below},
+		{"0x7.8p-149", math.Float32frombits(0x000000008), Above},
+		{"0x7.9p-149", math.Float32frombits(0x000000008), Above},
 
-// 		{"0x4.0p-149", math.Float32frombits(0x000000004), Exact},
-// 		{"0x4.8p-149", math.Float32frombits(0x000000004), Below}, // rounded down to even
-// 		{"0x4.9p-149", math.Float32frombits(0x000000005), Above},
+		// normals
+		{"0x.ffffffp-126", math.Float32frombits(0x00800000), Above}, // rounded up to smallest normal
+		{"1p-126", math.Float32frombits(0x00800000), Exact},         // smallest normal
+		{"0x1.fffffep-126", math.Float32frombits(0x00ffffff), Exact},
+		{"0x1.ffffffp-126", math.Float32frombits(0x01000000), Above}, // rounded up
+		{"1", 1, Exact},
+		{"1.000000000000000000001", 1, Below},
+		{"12345.0", 12345, Exact},
+		{"12345.000000000000000000001", 12345, Below},
+		{"0x1.fffffe0p127", math.MaxFloat32, Exact},
+		{"0x1.fffffe8p127", math.MaxFloat32, Below},
 
-// 		// specific case from issue 14553
-// 		{"0x7.7p-149", math.Float32frombits(0x000000007), Below},
-// 		{"0x7.8p-149", math.Float32frombits(0x000000008), Above},
-// 		{"0x7.9p-149", math.Float32frombits(0x000000008), Above},
+		// overflow
+		{"0x1.ffffff0p127", float32(math.Inf(+1)), Above},
+		{"0x1p128", float32(math.Inf(+1)), Above},
+		{"1e10000", float32(math.Inf(+1)), Above},
+		{"0x1.ffffff0p2147483646", float32(math.Inf(+1)), Above}, // overflow in rounding
 
-// 		// normals
-// 		{"0x.ffffffp-126", math.Float32frombits(0x00800000), Above}, // rounded up to smallest normal
-// 		{"1p-126", math.Float32frombits(0x00800000), Exact},         // smallest normal
-// 		{"0x1.fffffep-126", math.Float32frombits(0x00ffffff), Exact},
-// 		{"0x1.ffffffp-126", math.Float32frombits(0x01000000), Above}, // rounded up
-// 		{"1", 1, Exact},
-// 		{"1.000000000000000000001", 1, Below},
-// 		{"12345.0", 12345, Exact},
-// 		{"12345.000000000000000000001", 12345, Below},
-// 		{"0x1.fffffe0p127", math.MaxFloat32, Exact},
-// 		{"0x1.fffffe8p127", math.MaxFloat32, Below},
+		// inf
+		{"Inf", float32(math.Inf(+1)), Exact},
+	} {
+		for i := 0; i < 2; i++ {
+			// test both signs
+			tx, tout, tacc := test.x, test.out, test.acc
+			if i != 0 {
+				tx = "-" + tx
+				tout = -tout
+				tacc = -tacc
+			}
 
-// 		// overflow
-// 		{"0x1.ffffff0p127", float32(math.Inf(+1)), Above},
-// 		{"0x1p128", float32(math.Inf(+1)), Above},
-// 		{"1e10000", float32(math.Inf(+1)), Above},
-// 		{"0x1.ffffff0p2147483646", float32(math.Inf(+1)), Above}, // overflow in rounding
+			// conversion should match strconv where syntax is agreeable
+			if f, err := strconv.ParseFloat(tx, 32); err == nil && !alike32(float32(f), tout) {
+				t.Errorf("%s: got %g; want %g (incorrect test data)", tx, f, tout)
+			}
 
-// 		// inf
-// 		{"Inf", float32(math.Inf(+1)), Exact},
-// 	} {
-// 		for i := 0; i < 2; i++ {
-// 			// test both signs
-// 			tx, tout, tacc := test.x, test.out, test.acc
-// 			if i != 0 {
-// 				tx = "-" + tx
-// 				tout = -tout
-// 				tacc = -tacc
-// 			}
+			x := makeDecimal(tx)
+			out, acc := x.Float32()
+			// TODO(db47h): need to check accuracy, somehow.
+			if !alike32(out, tout) /* || acc != tacc */ { // do not check accuracy
+				t.Errorf("%s: got %g (%#08x, %s); want %g (%#08x, %s)", tx, out, math.Float32bits(out), acc, test.out, math.Float32bits(test.out), tacc)
+			}
 
-// 			// conversion should match strconv where syntax is agreeable
-// 			if f, err := strconv.ParseFloat(tx, 32); err == nil && !alike32(float32(f), tout) {
-// 				t.Errorf("%s: got %g; want %g (incorrect test data)", tx, f, tout)
-// 			}
+			// test that x.SetFloat64(float64(f)).Float32() == f
+			var x2 Decimal
+			out2, acc2 := x2.SetFloat64(float64(out)).Float32()
+			if !alike32(out2, out) /* || acc2 != Exact */ {
+				t.Errorf("idempotency test: got %g (%s); want %g (Exact)", out2, acc2, out)
+			}
+		}
+	}
+}
 
-// 			x := makeFloat(tx)
-// 			out, acc := x.Float32()
-// 			if !alike32(out, tout) || acc != tacc {
-// 				t.Errorf("%s: got %g (%#08x, %s); want %g (%#08x, %s)", tx, out, math.Float32bits(out), acc, test.out, math.Float32bits(test.out), tacc)
-// 			}
+func TestDecimalFloat64(t *testing.T) {
+	const smallestNormalFloat64 = 2.2250738585072014e-308 // 1p-1022
+	for _, test := range []struct {
+		x   string
+		out float64
+		acc Accuracy
+	}{
+		{"0", 0, Exact},
 
-// 			// test that x.SetFloat64(float64(f)).Float32() == f
-// 			var x2 Float
-// 			out2, acc2 := x2.SetFloat64(float64(out)).Float32()
-// 			if !alike32(out2, out) || acc2 != Exact {
-// 				t.Errorf("idempotency test: got %g (%s); want %g (Exact)", out2, acc2, out)
-// 			}
-// 		}
-// 	}
-// }
+		// underflow to zero
+		{"1e-1000", 0, Below},
+		{"0x0.0000000000001p-1023", 0, Below},
+		{"0x0.00000000000008p-1022", 0, Below},
 
-// func TestFloatFloat64(t *testing.T) {
-// 	const smallestNormalFloat64 = 2.2250738585072014e-308 // 1p-1022
-// 	for _, test := range []struct {
-// 		x   string
-// 		out float64
-// 		acc Accuracy
-// 	}{
-// 		{"0", 0, Exact},
+		// denormals
+		{"0x0.0000000000000cp-1022", math.SmallestNonzeroFloat64, Above}, // rounded up to smallest denormal
+		{"0x0.00000000000010p-1022", math.SmallestNonzeroFloat64, Exact}, // smallest denormal
+		{"0x.8p-1073", math.SmallestNonzeroFloat64, Exact},
+		{"1p-1074", math.SmallestNonzeroFloat64, Exact},
+		{"0x.fffffffffffffp-1022", math.Float64frombits(0x000fffffffffffff), Exact}, // largest denormal
 
-// 		// underflow to zero
-// 		{"1e-1000", 0, Below},
-// 		{"0x0.0000000000001p-1023", 0, Below},
-// 		{"0x0.00000000000008p-1022", 0, Below},
+		// special denormal cases (see issues 14553, 14651)
+		{"0x0.00000000000001p-1022", math.Float64frombits(0x00000000000000000), Below}, // underflow to zero
+		{"0x0.00000000000004p-1022", math.Float64frombits(0x00000000000000000), Below}, // underflow to zero
+		{"0x0.00000000000008p-1022", math.Float64frombits(0x00000000000000000), Below}, // rounded down to even
+		{"0x0.00000000000009p-1022", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x0.0000000000000ap-1022", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
 
-// 		// denormals
-// 		{"0x0.0000000000000cp-1022", math.SmallestNonzeroFloat64, Above}, // rounded up to smallest denormal
-// 		{"0x0.00000000000010p-1022", math.SmallestNonzeroFloat64, Exact}, // smallest denormal
-// 		{"0x.8p-1073", math.SmallestNonzeroFloat64, Exact},
-// 		{"1p-1074", math.SmallestNonzeroFloat64, Exact},
-// 		{"0x.fffffffffffffp-1022", math.Float64frombits(0x000fffffffffffff), Exact}, // largest denormal
+		{"0x0.8p-1074", math.Float64frombits(0x00000000000000000), Below}, // rounded down to even
+		{"0x0.9p-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x0.ap-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x0.bp-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x0.cp-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
 
-// 		// special denormal cases (see issues 14553, 14651)
-// 		{"0x0.00000000000001p-1022", math.Float64frombits(0x00000000000000000), Below}, // underflow to zero
-// 		{"0x0.00000000000004p-1022", math.Float64frombits(0x00000000000000000), Below}, // underflow to zero
-// 		{"0x0.00000000000008p-1022", math.Float64frombits(0x00000000000000000), Below}, // rounded down to even
-// 		{"0x0.00000000000009p-1022", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.0000000000000ap-1022", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x1.0p-1074", math.Float64frombits(0x00000000000000001), Exact},
+		{"0x1.7p-1074", math.Float64frombits(0x00000000000000001), Below},
+		{"0x1.8p-1074", math.Float64frombits(0x00000000000000002), Above},
+		{"0x1.9p-1074", math.Float64frombits(0x00000000000000002), Above},
 
-// 		{"0x0.8p-1074", math.Float64frombits(0x00000000000000000), Below}, // rounded down to even
-// 		{"0x0.9p-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.ap-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.bp-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
-// 		{"0x0.cp-1074", math.Float64frombits(0x00000000000000001), Above}, // rounded up to smallest denormal
+		{"0x2.0p-1074", math.Float64frombits(0x00000000000000002), Exact},
+		{"0x2.8p-1074", math.Float64frombits(0x00000000000000002), Below}, // rounded down to even
+		{"0x2.9p-1074", math.Float64frombits(0x00000000000000003), Above},
 
-// 		{"0x1.0p-1074", math.Float64frombits(0x00000000000000001), Exact},
-// 		{"0x1.7p-1074", math.Float64frombits(0x00000000000000001), Below},
-// 		{"0x1.8p-1074", math.Float64frombits(0x00000000000000002), Above},
-// 		{"0x1.9p-1074", math.Float64frombits(0x00000000000000002), Above},
+		{"0x3.0p-1074", math.Float64frombits(0x00000000000000003), Exact},
+		{"0x3.7p-1074", math.Float64frombits(0x00000000000000003), Below},
+		{"0x3.8p-1074", math.Float64frombits(0x00000000000000004), Above}, // rounded up to even
 
-// 		{"0x2.0p-1074", math.Float64frombits(0x00000000000000002), Exact},
-// 		{"0x2.8p-1074", math.Float64frombits(0x00000000000000002), Below}, // rounded down to even
-// 		{"0x2.9p-1074", math.Float64frombits(0x00000000000000003), Above},
+		{"0x4.0p-1074", math.Float64frombits(0x00000000000000004), Exact},
+		{"0x4.8p-1074", math.Float64frombits(0x00000000000000004), Below}, // rounded down to even
+		{"0x4.9p-1074", math.Float64frombits(0x00000000000000005), Above},
 
-// 		{"0x3.0p-1074", math.Float64frombits(0x00000000000000003), Exact},
-// 		{"0x3.7p-1074", math.Float64frombits(0x00000000000000003), Below},
-// 		{"0x3.8p-1074", math.Float64frombits(0x00000000000000004), Above}, // rounded up to even
+		// normals
+		{"0x.fffffffffffff8p-1022", math.Float64frombits(0x0010000000000000), Above}, // rounded up to smallest normal
+		{"1p-1022", math.Float64frombits(0x0010000000000000), Exact},                 // smallest normal
+		{"1", 1, Exact},
+		{"1.000000000000000000001", 1, Below},
+		{"12345.0", 12345, Exact},
+		{"12345.000000000000000000001", 12345, Below},
+		{"0x1.fffffffffffff0p1023", math.MaxFloat64, Exact},
+		{"0x1.fffffffffffff4p1023", math.MaxFloat64, Below},
 
-// 		{"0x4.0p-1074", math.Float64frombits(0x00000000000000004), Exact},
-// 		{"0x4.8p-1074", math.Float64frombits(0x00000000000000004), Below}, // rounded down to even
-// 		{"0x4.9p-1074", math.Float64frombits(0x00000000000000005), Above},
+		// overflow
+		{"0x1.fffffffffffff8p1023", math.Inf(+1), Above},
+		{"0x1p1024", math.Inf(+1), Above},
+		{"1e10000", math.Inf(+1), Above},
+		{"0x1.fffffffffffff8p2147483646", math.Inf(+1), Above}, // overflow in rounding
+		{"Inf", math.Inf(+1), Exact},
 
-// 		// normals
-// 		{"0x.fffffffffffff8p-1022", math.Float64frombits(0x0010000000000000), Above}, // rounded up to smallest normal
-// 		{"1p-1022", math.Float64frombits(0x0010000000000000), Exact},                 // smallest normal
-// 		{"1", 1, Exact},
-// 		{"1.000000000000000000001", 1, Below},
-// 		{"12345.0", 12345, Exact},
-// 		{"12345.000000000000000000001", 12345, Below},
-// 		{"0x1.fffffffffffff0p1023", math.MaxFloat64, Exact},
-// 		{"0x1.fffffffffffff4p1023", math.MaxFloat64, Below},
+		// selected denormalized values that were handled incorrectly in the past
+		{"0x.fffffffffffffp-1022", smallestNormalFloat64 - math.SmallestNonzeroFloat64, Exact},
+		{"4503599627370495p-1074", smallestNormalFloat64 - math.SmallestNonzeroFloat64, Exact},
 
-// 		// overflow
-// 		{"0x1.fffffffffffff8p1023", math.Inf(+1), Above},
-// 		{"0x1p1024", math.Inf(+1), Above},
-// 		{"1e10000", math.Inf(+1), Above},
-// 		{"0x1.fffffffffffff8p2147483646", math.Inf(+1), Above}, // overflow in rounding
-// 		{"Inf", math.Inf(+1), Exact},
+		// https://www.exploringbinary.com/php-hangs-on-numeric-value-2-2250738585072011e-308/
+		{"2.2250738585072011e-308", 2.225073858507201e-308, Below},
+		// https://www.exploringbinary.com/java-hangs-when-converting-2-2250738585072012e-308/
+		{"2.2250738585072012e-308", 2.2250738585072014e-308, Above},
+	} {
+		for i := 0; i < 2; i++ {
+			// test both signs
+			tx, tout, tacc := test.x, test.out, test.acc
+			if i != 0 {
+				tx = "-" + tx
+				tout = -tout
+				tacc = -tacc
+			}
 
-// 		// selected denormalized values that were handled incorrectly in the past
-// 		{"0x.fffffffffffffp-1022", smallestNormalFloat64 - math.SmallestNonzeroFloat64, Exact},
-// 		{"4503599627370495p-1074", smallestNormalFloat64 - math.SmallestNonzeroFloat64, Exact},
+			// conversion should match strconv where syntax is agreeable
+			if f, err := strconv.ParseFloat(tx, 64); err == nil && !alike64(f, tout) {
+				t.Errorf("%s: got %g; want %g (incorrect test data)", tx, f, tout)
+			}
 
-// 		// https://www.exploringbinary.com/php-hangs-on-numeric-value-2-2250738585072011e-308/
-// 		{"2.2250738585072011e-308", 2.225073858507201e-308, Below},
-// 		// https://www.exploringbinary.com/java-hangs-when-converting-2-2250738585072012e-308/
-// 		{"2.2250738585072012e-308", 2.2250738585072014e-308, Above},
-// 	} {
-// 		for i := 0; i < 2; i++ {
-// 			// test both signs
-// 			tx, tout, tacc := test.x, test.out, test.acc
-// 			if i != 0 {
-// 				tx = "-" + tx
-// 				tout = -tout
-// 				tacc = -tacc
-// 			}
+			x := makeDecimal(tx)
+			out, acc := x.Float64()
+			// TODO(db47h): need to check accuracy, somehow.
+			if !alike64(out, tout) /*|| acc != tacc */ {
+				t.Errorf("%s: got %g (%#016x, %s); want %g (%#016x, %s)", tx, out, math.Float64bits(out), acc, test.out, math.Float64bits(test.out), tacc)
+			}
 
-// 			// conversion should match strconv where syntax is agreeable
-// 			if f, err := strconv.ParseFloat(tx, 64); err == nil && !alike64(f, tout) {
-// 				t.Errorf("%s: got %g; want %g (incorrect test data)", tx, f, tout)
-// 			}
+			// test that x.SetFloat64(f).Float64() == f
+			var x2 Decimal
+			out2, acc2 := x2.SetFloat64(out).Float64()
+			if !alike64(out2, out) /* || acc2 != Exact */ {
+				t.Errorf("idempotency test: got %g (%s); want %g (Exact)", out2, acc2, out)
+			}
+		}
+	}
+}
 
-// 			x := makeFloat(tx)
-// 			out, acc := x.Float64()
-// 			if !alike64(out, tout) || acc != tacc {
-// 				t.Errorf("%s: got %g (%#016x, %s); want %g (%#016x, %s)", tx, out, math.Float64bits(out), acc, test.out, math.Float64bits(test.out), tacc)
-// 			}
+func TestDecimalInt(t *testing.T) {
+	for _, test := range []struct {
+		x    string
+		want string
+		acc  Accuracy
+	}{
+		{"0", "0", Exact},
+		{"+0", "0", Exact},
+		{"-0", "0", Exact},
+		{"Inf", "nil", Below},
+		{"+Inf", "nil", Below},
+		{"-Inf", "nil", Above},
+		{"1", "1", Exact},
+		{"-1", "-1", Exact},
+		{"1.23", "1", Below},
+		{"-1.23", "-1", Above},
+		{"123e-2", "1", Below},
+		{"123e-3", "0", Below},
+		{"123e-4", "0", Below},
+		{"1e-1000", "0", Below},
+		{"-1e-1000", "0", Above},
+		{"1e+10", "10000000000", Exact},
+		{"1e+100", "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", Exact},
+	} {
+		x := makeDecimal(test.x)
+		res, acc := x.Int(nil)
+		got := "nil"
+		if res != nil {
+			got = res.String()
+		}
+		if got != test.want || acc != test.acc {
+			t.Errorf("%s: got %s (%s); want %s (%s)", test.x, got, acc, test.want, test.acc)
+		}
+	}
 
-// 			// test that x.SetFloat64(f).Float64() == f
-// 			var x2 Float
-// 			out2, acc2 := x2.SetFloat64(out).Float64()
-// 			if !alike64(out2, out) || acc2 != Exact {
-// 				t.Errorf("idempotency test: got %g (%s); want %g (Exact)", out2, acc2, out)
-// 			}
-// 		}
-// 	}
-// }
+	// check that supplied *Int is used
+	for _, f := range []string{"0", "1", "-1", "1234"} {
+		x := makeDecimal(f)
+		i := new(big.Int)
+		if res, _ := x.Int(i); res != i {
+			t.Errorf("(%s).Int is not using supplied *Int", f)
+		}
+	}
+}
 
-// func TestFloatInt(t *testing.T) {
-// 	for _, test := range []struct {
-// 		x    string
-// 		want string
-// 		acc  Accuracy
-// 	}{
-// 		{"0", "0", Exact},
-// 		{"+0", "0", Exact},
-// 		{"-0", "0", Exact},
-// 		{"Inf", "nil", Below},
-// 		{"+Inf", "nil", Below},
-// 		{"-Inf", "nil", Above},
-// 		{"1", "1", Exact},
-// 		{"-1", "-1", Exact},
-// 		{"1.23", "1", Below},
-// 		{"-1.23", "-1", Above},
-// 		{"123e-2", "1", Below},
-// 		{"123e-3", "0", Below},
-// 		{"123e-4", "0", Below},
-// 		{"1e-1000", "0", Below},
-// 		{"-1e-1000", "0", Above},
-// 		{"1e+10", "10000000000", Exact},
-// 		{"1e+100", "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", Exact},
-// 	} {
-// 		x := makeFloat(test.x)
-// 		res, acc := x.Int(nil)
-// 		got := "nil"
-// 		if res != nil {
-// 			got = res.String()
-// 		}
-// 		if got != test.want || acc != test.acc {
-// 			t.Errorf("%s: got %s (%s); want %s (%s)", test.x, got, acc, test.want, test.acc)
-// 		}
-// 	}
+func TestDecimalRat(t *testing.T) {
+	for _, test := range []struct {
+		x, want string
+		acc     Accuracy
+	}{
+		{"0", "0/1", Exact},
+		{"+0", "0/1", Exact},
+		{"-0", "0/1", Exact},
+		{"Inf", "nil", Below},
+		{"+Inf", "nil", Below},
+		{"-Inf", "nil", Above},
+		{"1", "1/1", Exact},
+		{"-1", "-1/1", Exact},
+		{"1.25", "5/4", Exact},
+		{"-1.25", "-5/4", Exact},
+		{"1e10", "10000000000/1", Exact},
+		{"1p10", "1024/1", Exact},
+		{"-1p-10", "-1/1024", Exact},
+		{"3.14159265", "62831853/20000000", Exact},
+	} {
+		x := makeDecimal(test.x).SetPrec(34)
+		res, acc := x.Rat(nil)
+		got := "nil"
+		if res != nil {
+			got = res.String()
+		}
+		if got != test.want {
+			t.Errorf("%s: got %s; want %s", test.x, got, test.want)
+			continue
+		}
+		if acc != test.acc {
+			t.Errorf("%s: got %s; want %s", test.x, acc, test.acc)
+			continue
+		}
 
-// 	// check that supplied *Int is used
-// 	for _, f := range []string{"0", "1", "-1", "1234"} {
-// 		x := makeFloat(f)
-// 		i := new(Int)
-// 		if res, _ := x.Int(i); res != i {
-// 			t.Errorf("(%s).Int is not using supplied *Int", f)
-// 		}
-// 	}
-// }
+		// inverse conversion
+		if res != nil {
+			got := new(Decimal).SetPrec(34).SetRat(res)
+			if got.Cmp(x) != 0 {
+				t.Errorf("%s: got %s; want %s", test.x, got, x)
+			}
+		}
+	}
 
-// func TestFloatRat(t *testing.T) {
-// 	for _, test := range []struct {
-// 		x, want string
-// 		acc     Accuracy
-// 	}{
-// 		{"0", "0/1", Exact},
-// 		{"+0", "0/1", Exact},
-// 		{"-0", "0/1", Exact},
-// 		{"Inf", "nil", Below},
-// 		{"+Inf", "nil", Below},
-// 		{"-Inf", "nil", Above},
-// 		{"1", "1/1", Exact},
-// 		{"-1", "-1/1", Exact},
-// 		{"1.25", "5/4", Exact},
-// 		{"-1.25", "-5/4", Exact},
-// 		{"1e10", "10000000000/1", Exact},
-// 		{"1p10", "1024/1", Exact},
-// 		{"-1p-10", "-1/1024", Exact},
-// 		{"3.14159265", "7244019449799623199/2305843009213693952", Exact},
-// 	} {
-// 		x := makeFloat(test.x).SetPrec(64)
-// 		res, acc := x.Rat(nil)
-// 		got := "nil"
-// 		if res != nil {
-// 			got = res.String()
-// 		}
-// 		if got != test.want {
-// 			t.Errorf("%s: got %s; want %s", test.x, got, test.want)
-// 			continue
-// 		}
-// 		if acc != test.acc {
-// 			t.Errorf("%s: got %s; want %s", test.x, acc, test.acc)
-// 			continue
-// 		}
+	// check that supplied *Rat is used
+	for _, f := range []string{"0", "1", "-1", "1234"} {
+		x := makeDecimal(f)
+		r := new(big.Rat)
+		if res, _ := x.Rat(r); res != r {
+			t.Errorf("(%s).Rat is not using supplied *Rat", f)
+		}
+	}
+}
 
-// 		// inverse conversion
-// 		if res != nil {
-// 			got := new(Float).SetPrec(64).SetRat(res)
-// 			if got.Cmp(x) != 0 {
-// 				t.Errorf("%s: got %s; want %s", test.x, got, x)
-// 			}
-// 		}
-// 	}
+func TestDecimalAbs(t *testing.T) {
+	for _, test := range []string{
+		"0",
+		"1",
+		"1234",
+		"1.23e-2",
+		"1e-1000",
+		"1e1000",
+		"Inf",
+	} {
+		p := makeDecimal(test)
+		a := new(Decimal).Abs(p)
+		if !alike(a, p) {
+			t.Errorf("%s: got %s; want %s", test, a.Text('g', 10), test)
+		}
 
-// 	// check that supplied *Rat is used
-// 	for _, f := range []string{"0", "1", "-1", "1234"} {
-// 		x := makeFloat(f)
-// 		r := new(Rat)
-// 		if res, _ := x.Rat(r); res != r {
-// 			t.Errorf("(%s).Rat is not using supplied *Rat", f)
-// 		}
-// 	}
-// }
+		n := makeDecimal("-" + test)
+		a.Abs(n)
+		if !alike(a, p) {
+			t.Errorf("-%s: got %s; want %s", test, a.Text('g', 10), test)
+		}
+	}
+}
 
-// func TestFloatAbs(t *testing.T) {
-// 	for _, test := range []string{
-// 		"0",
-// 		"1",
-// 		"1234",
-// 		"1.23e-2",
-// 		"1e-1000",
-// 		"1e1000",
-// 		"Inf",
-// 	} {
-// 		p := makeFloat(test)
-// 		a := new(Float).Abs(p)
-// 		if !alike(a, p) {
-// 			t.Errorf("%s: got %s; want %s", test, a.Text('g', 10), test)
-// 		}
+func TestDecimalNeg(t *testing.T) {
+	for _, test := range []string{
+		"0",
+		"1",
+		"1234",
+		"1.23e-2",
+		"1e-1000",
+		"1e1000",
+		"Inf",
+	} {
+		p1 := makeDecimal(test)
+		n1 := makeDecimal("-" + test)
+		n2 := new(Decimal).Neg(p1)
+		p2 := new(Decimal).Neg(n2)
+		if !alike(n2, n1) {
+			t.Errorf("%s: got %s; want %s", test, n2.Text('g', 10), n1.Text('g', 10))
+		}
+		if !alike(p2, p1) {
+			t.Errorf("%s: got %s; want %s", test, p2.Text('g', 10), p1.Text('g', 10))
+		}
+	}
+}
 
-// 		n := makeFloat("-" + test)
-// 		a.Abs(n)
-// 		if !alike(a, p) {
-// 			t.Errorf("-%s: got %s; want %s", test, a.Text('g', 10), test)
-// 		}
-// 	}
-// }
+func TestDecimalInc(t *testing.T) {
+	const n = 10
+	for _, prec := range precList {
+		var x, one Decimal
+		x.SetPrec(prec)
+		one.SetInt64(1)
+		for i := 0; i < n; i++ {
+			x.Add(&x, &one)
+		}
+		if x.Cmp(new(Decimal).SetInt64(n)) != 0 {
+			t.Errorf("prec = %d: got %s; want %d", prec, &x, n)
+		}
+	}
+}
 
-// func TestFloatNeg(t *testing.T) {
-// 	for _, test := range []string{
-// 		"0",
-// 		"1",
-// 		"1234",
-// 		"1.23e-2",
-// 		"1e-1000",
-// 		"1e1000",
-// 		"Inf",
-// 	} {
-// 		p1 := makeFloat(test)
-// 		n1 := makeFloat("-" + test)
-// 		n2 := new(Float).Neg(p1)
-// 		p2 := new(Float).Neg(n2)
-// 		if !alike(n2, n1) {
-// 			t.Errorf("%s: got %s; want %s", test, n2.Text('g', 10), n1.Text('g', 10))
-// 		}
-// 		if !alike(p2, p1) {
-// 			t.Errorf("%s: got %s; want %s", test, p2.Text('g', 10), p1.Text('g', 10))
-// 		}
-// 	}
-// }
-
-// func TestFloatInc(t *testing.T) {
-// 	const n = 10
-// 	for _, prec := range precList {
-// 		if 1<<prec < n {
-// 			continue // prec must be large enough to hold all numbers from 0 to n
-// 		}
-// 		var x, one Float
-// 		x.SetPrec(prec)
-// 		one.SetInt64(1)
-// 		for i := 0; i < n; i++ {
-// 			x.Add(&x, &one)
-// 		}
-// 		if x.Cmp(new(Float).SetInt64(n)) != 0 {
-// 			t.Errorf("prec = %d: got %s; want %d", prec, &x, n)
-// 		}
-// 	}
-// }
-
-// // Selected precisions with which to run various tests.
-// var precList = [...]uint{1, 2, 5, 8, 10, 16, 23, 24, 32, 50, 53, 64, 100, 128, 500, 511, 512, 513, 1000, 10000}
+// Selected precisions with which to run various tests.
+var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 3000}
 
 // // Selected bits with which to run various tests.
 // // Each entry is a list of bits representing a floating-point number (see fromBits).

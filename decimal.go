@@ -544,6 +544,9 @@ func (x *Decimal) Int(z *big.Int) (*big.Int, Accuracy) {
 		// TODO(db47h): decToNat incurs a copy of its x parameter.
 		// Here we do not care about trashing it.
 		z.SetBits(decToNat(z.Bits(), x.intMant()))
+		if x.neg != (z.Sign() < 0) {
+			z.Neg(z)
+		}
 		return z, acc
 
 	case zero:
@@ -1058,7 +1061,7 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 }
 
 // SetFloat64 sets z to the (possibly rounded) value of x and returns z. If z's
-// precision is 0, it is changed to 17 (and rounding will have no effect).
+// precision is 0, it is changed to 17.
 // SetFloat64 panics with ErrNaN if x is a NaN. Conversion is performed using
 // z's precision and rounding mode. See caveat in (*Decimal).SetFloat.
 func (z *Decimal) SetFloat64(x float64) *Decimal {
@@ -1114,23 +1117,28 @@ const log2_10 = math.Ln10 / math.Ln2
 const log10_2 = math.Ln2 / math.Ln10
 
 // SetInt sets z to the (possibly rounded) value of x and returns z. If z's
-// precision is 0, it is changed to max(⌈x.BitLen() * Log10(2)⌉,
-// DefaultDecimalPrec) (and rounding will have no effect).
+// precision is 0, it is changed, after conversion, to max(z.MinPrec(), DefaultDecimalPrec) (and
+// rounding will have no effect).
+//
+// For example:
+//
+//     new(Decimal).SetInt(big.NewInt(1e40)).Prec() == 1
+//
 func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	bits := uint32(x.BitLen())
 	z.acc = Exact
 	z.neg = x.Sign() < 0
 	if bits == 0 {
 		z.form = zero
-		z.prec = uint32(max(int(z.prec), DefaultDecimalPrec))
+		z.prec = DefaultDecimalPrec
 		return z
 	}
 	// x != 0
 
-	prec := int(math.Ceil(float64(bits) * log10_2)) // off by 1 at most
+	prec := uint32(math.Ceil(float64(bits) * log10_2)) // off by 1 at most
 	// TODO(db47h) truncating x could be more efficient if z.prec > 0
 	// but small compared to the size of x.
-	z.mant = z.mant.make((prec + _DW - 1) / _DW).setNat(x.Bits())
+	z.mant = z.mant.make(int((prec + _DW - 1) / _DW)).setNat(x.Bits())
 	exp := dnorm(z.mant)
 	if z.prec == 0 {
 		// adjust precision

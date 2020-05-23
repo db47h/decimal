@@ -14,8 +14,8 @@ import (
 // license that can be found in the LICENSE file.
 
 var (
-	oneHalf = NewDecimal(0.5) // must be exact
-	three   = NewDecimal(3.0) // must be exact
+	oneHalf = NewDecimal(5, -1)
+	three   = NewDecimal(3, 0)
 )
 
 // Sqrt sets z to the rounded square root of x, and returns it.

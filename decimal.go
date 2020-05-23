@@ -91,14 +91,17 @@ type Decimal struct {
 	neg  bool
 }
 
-// NewDecimal allocates and returns a new Decimal set to x, with precision
-// 17 and rounding mode ToNearestEven. NewDecimal panics with
-// ErrNaN if x is a NaN.
-func NewDecimal(x float64) *Decimal {
-	if math.IsNaN(x) {
-		panic(ErrNaN{"NewDecimal(NaN)"})
+// NewDecimal allocates and returns a new Decimal set to x×10**exp, with
+// precision DefaultDecimalPrec and rounding mode ToNearestEven.
+//
+// The result will be set to ±0 if x < 0.1×10**MinPexp, or ±Inf if
+// x >= 1×10**MaxExp.
+func NewDecimal(x int64, exp int) *Decimal {
+	u := x
+	if u < 0 {
+		u = -u
 	}
-	return new(Decimal).SetFloat64(x)
+	return new(Decimal).setBits64(x < 0, uint64(u), int64(exp))
 }
 
 // Abs sets z to the (possibly rounded) value |x| (the absolute value of x)
@@ -959,7 +962,7 @@ func (x *Decimal) Rat(z *big.Rat) (*big.Rat, Accuracy) {
 			// z already in normal form
 		case x.exp < allDigits:
 			z.Num().SetBits(decToNat(z.Num().Bits(), x.mant))
-			t, _ := dec(nil).setUint64(1)
+			t := dec(nil).setUint64(1)
 			t = t.shl(t, uint(allDigits-x.exp))
 			// we cannot set z.b directly since z.norm() is not exported.
 			y := new(big.Rat)
@@ -1087,8 +1090,8 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 	z.form = finite
 	fmant, exp2 := math.Frexp(x) // get normalized mantissa
 	exp2 -= 64
-	z.mant, z.exp = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
-	dnorm(z.mant)
+	z.mant = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
+	z.exp = int32(len(z.mant))*_DW - int32(dnorm(z.mant))
 	if exp2 != 0 {
 		// multiply / divide by 2**exp with increased precision
 		z.prec += 1
@@ -1145,7 +1148,7 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	return z
 }
 
-func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
+func (z *Decimal) setBits64(neg bool, x uint64, exp int64) *Decimal {
 	if z.prec == 0 {
 		z.prec = DefaultDecimalPrec
 	}
@@ -1157,11 +1160,8 @@ func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
 	}
 	// x != 0
 	z.form = finite
-	z.mant, z.exp = z.mant.setUint64(x)
-	dnorm(z.mant)
-	if z.prec < 20 {
-		z.round(0)
-	}
+	z.mant = z.mant.setUint64(x)
+	z.setExpAndRound(exp+int64(len(z.mant))*_DW-dnorm(z.mant), 0)
 	return z
 }
 
@@ -1175,7 +1175,7 @@ func (z *Decimal) SetInt64(x int64) *Decimal {
 	}
 	// We cannot simply call z.SetUint64(uint64(u)) and change
 	// the sign afterwards because the sign affects rounding.
-	return z.setBits64(x < 0, uint64(u))
+	return z.setBits64(x < 0, uint64(u), 0)
 }
 
 func (z *Decimal) setExpAndRound(exp int64, sbit uint) {
@@ -1286,7 +1286,7 @@ func (z *Decimal) SetRat(x *big.Rat) *Decimal {
 // precision is 0, it is changed to DefaultDecimalPrec (and rounding will have
 // no effect).
 func (z *Decimal) SetUint64(x uint64) *Decimal {
-	return z.setBits64(false, x)
+	return z.setBits64(false, x, 0)
 }
 
 // Sign returns:
@@ -1641,4 +1641,8 @@ func (z *Decimal) SetBitsExp(mant []Word, exp int64) *Decimal {
 		z.exp = 0
 	}
 	return z
+}
+
+func (x *Decimal) mantDigits() int64 {
+	return int64(len(x.mant)) * _DW
 }

@@ -128,9 +128,9 @@ func BenchmarkDecimal_Float(b *testing.B) {
 }
 
 func TestDecimal_FMA(t *testing.T) {
-	x := NewDecimal(1.23).SetPrec(3)
-	y := NewDecimal(2.27).SetPrec(3)
-	u := NewDecimal(0.003).SetPrec(3)
+	x := NewDecimal(123, -2).SetPrec(3)
+	y := NewDecimal(227, -2).SetPrec(3)
+	u := NewDecimal(3, -3).SetPrec(3)
 	z := new(Decimal).SetPrec(3).Mul(x, y) // == 2.7921
 	z.Add(z, u)
 	if s := z.String(); s != "2.79" {

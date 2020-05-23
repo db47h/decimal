@@ -37,12 +37,12 @@ in the usual ways and denote 0 without further initialization:
 Alternatively, new Decimal values can be allocated and initialized with the
 function:
 
-    func NewDecimal(f float64) *Decimal
+    func NewDecimal(x int64, exp int) *Decimal
 
-For instance, NewDecimal(x) returns a *Decimal set to the value of the float64
-argument f. More flexibility is provided with explicit setters, for instance:
+NewDecimal(x, exp) returns a *Decimal set to the value of x×10**exp. More
+flexibility is provided with explicit setters, for instance:
 
-    z := new(Float).SetUint64(123)    // z3 := 123.0
+    z := new(Decimal).SetUint64(123)    // z3 := 123.0
 
 Setters, numeric operations and predicates are represented as methods of the
 form:

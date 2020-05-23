@@ -114,19 +114,18 @@ func (z dec) setWord(x Word) dec {
 	return z
 }
 
-func (z dec) setUint64(x uint64) (dec, int32) {
-	dig := int32(decDigits64(x))
+func (z dec) setUint64(x uint64) dec {
 	if w := Word(x); uint64(w) == x && w < _DB {
-		return z.setWord(w), dig
+		return z.setWord(w)
 	}
 	// x could be a 2 to 3 words value
-	z = z.make(int(dig+_DW-1) / _DW)
+	z = z.make(int(decDigits64(x)+_DW-1) / _DW)
 	for i := 0; i < len(z); i++ {
 		hi, lo := bits.Div64(0, x, _DB)
 		z[i] = Word(lo)
 		x = hi
 	}
-	return z.norm(), dig
+	return z.norm()
 }
 
 // toUint64 returns the low 64 bits of z or MaxUint64 and true if z <= MaxUint64.

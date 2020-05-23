@@ -250,8 +250,8 @@ type nat []Word
 const divRecursiveThreshold = 100
 
 // karatsubaLen computes an approximation to the maximum k <= n such that
-// k = p/10**i for a number p <= threshold and an i >= 0. Thus, the
-// result is the largest number that can be divided repeatedly by 10 before
+// k = p<<i for a number p <= threshold and an i >= 0. Thus, the
+// result is the largest number that can be divided repeatedly by 2 before
 // becoming about the value of threshold.
 func karatsubaLen(n, threshold int) int {
 	i := uint(0)

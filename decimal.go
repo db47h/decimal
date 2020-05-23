@@ -65,10 +65,10 @@ var (
 // value determined by the operands, and their mode is the zero value for
 // RoundingMode (ToNearestEven).
 //
-// By setting the desired precision to 16 or 53 and using matching rounding mode
+// By setting the desired precision to 16 or 34 and using matching rounding mode
 // (typically ToNearestEven), Decimal operations produce the same results as the
 // corresponding decimal64 or decimal128 IEEE-754 decimal arithmetic for
-// operands that correspond to normal (i.e., not denormal) decimal64 or
+// operands that correspond to normal (i.e., not subnormal) decimal64 or
 // decimal128 numbers. Exponent underflow and overflow lead to a 0 or an
 // Infinity for different values than IEEE-754 because Decimal exponents have a
 // much larger range.
@@ -640,6 +640,8 @@ func (x *Decimal) IsInf() bool {
 	return x.form == inf
 }
 
+// IsInt reports whether x is an integer.
+// ±Inf values are not integers.
 func (x *Decimal) IsInt() bool {
 	if debugDecimal {
 		x.validate()
@@ -655,6 +657,14 @@ func (x *Decimal) IsInt() bool {
 	// x.exp > 0
 	// mant[0:prec] * 10**exp >= 0 || mant[0:mant.MinPrec()]*10**exp >= 0
 	return x.prec <= uint32(x.exp) || x.MinPrec() <= uint(x.exp)
+}
+
+// IsZero reports whether x is +0 or -0.
+func (x *Decimal) IsZero() bool {
+	if debugDecimal {
+		x.validate()
+	}
+	return x.form == 0
 }
 
 // MantExp breaks x into its mantissa and exponent components
@@ -746,6 +756,72 @@ func (z *Decimal) Mul(x, y *Decimal) *Decimal {
 	// x * ±0
 	z.form = zero
 	return z
+}
+
+// FMA sets z to x * y + u, computed with only one rounding. (That is, FMA
+// performs the fused multiply-add of x, y, and u.) If z's precision is 0, it is
+// changed to the larger of x's, y's, or u's precision before the operation.
+// Rounding, and accuracy reporting are as for Add. FMA panics with ErrNaN if
+// multiplying zero with an infinity, or if adding two infinities with opposite
+// signs. The value of z is undefined in that case.
+func (z *Decimal) FMA(x, y, u *Decimal) *Decimal {
+	if debugDecimal {
+		x.validate()
+		y.validate()
+		u.validate()
+	}
+
+	if z.prec == 0 {
+		z.prec = umax32(umax32(x.prec, y.prec), u.prec)
+	}
+
+	if u.form == zero {
+		return z.Mul(x, y)
+	}
+	// 0 < |u| <= Inf
+
+	// avoid trashing z if u == z
+	z0 := z
+	if alias(z.mant, u.mant) {
+		z0 = new(Decimal)
+		z0.mode = z.mode
+		z0.prec = z.prec
+	}
+
+	z0.neg = x.neg != y.neg
+
+	if x.form == finite && y.form == finite {
+		// x * y (common case)
+		// prevent rounding in umul
+		prec := z0.prec
+		z0.prec = MaxPrec
+		z0.umul(x, y)
+		// restore precision without rounding
+		z0.prec = prec
+		return z.Add(z0, u)
+	}
+
+	if x.form == zero && y.form == inf || x.form == inf && y.form == zero {
+		// ±0 * ±Inf
+		// ±Inf * ±0
+		// value of z is undefined but make sure it's valid
+		z.acc = Exact
+		z.form = zero
+		z.neg = false
+		panic(ErrNaN{"multiplication of zero with infinity"})
+	}
+
+	if x.form == inf || y.form == inf {
+		// ±Inf * y + u
+		// x * ±Inf + u
+		z0.acc = Exact
+		z0.form = inf
+		return z.Add(z0, u)
+	}
+
+	// ±0 * y + u
+	// x * ±0 + u
+	return z.Set(u)
 }
 
 // Neg sets z to the (possibly rounded) value of x with its sign negated,
@@ -1070,7 +1146,6 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 }
 
 func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
-	prec := uint32(20)
 	if z.prec == 0 {
 		z.prec = DefaultDecimalPrec
 	}
@@ -1084,7 +1159,7 @@ func (z *Decimal) setBits64(neg bool, x uint64) *Decimal {
 	z.form = finite
 	z.mant, z.exp = z.mant.setUint64(x)
 	dnorm(z.mant)
-	if z.prec < prec {
+	if z.prec < 20 {
 		z.round(0)
 	}
 	return z
@@ -1506,12 +1581,6 @@ func (z *Decimal) umul(x, y *Decimal) {
 		validateBinaryOperands(x, y)
 	}
 
-	// Note: This is doing too much work if the precision
-	// of z is less than the sum of the precisions of x
-	// and y which is often the case (e.g., if all Decimals
-	// have the same precision).
-	// TODO(db47h) Optimize this for the common case.
-
 	e := int64(x.exp) + int64(y.exp)
 	if x == y {
 		z.mant = z.mant.sqr(x.mant)
@@ -1521,38 +1590,51 @@ func (z *Decimal) umul(x, y *Decimal) {
 	z.setExpAndRound(e-dnorm(z.mant), 0)
 }
 
-// DigitsPerWord is the number of decimal digits per 32 or 64 bits Word in the
-// mantissa.
-const DigitsPerWord = _DW
+const (
+	DigitsPerWord = _DW // number of decimal digits per 32 or 64 bits mantissa Word
+	DecimalBase   = _DB // decimal base
+)
 
-// BitsExp provides raw (unchecked but fast) access to x by returning its mantissa
-// (as a little-endian Word slice) and exponent. The result and x share the same
-// underlying array.
+// BitsExp provides raw (unchecked but fast) access to x by returning its
+// mantissa (as a little-endian Word slice) and exponent. The result and x share
+// the same underlying array.
+//
+// Should the returned slice nned to be extended, check its capacity first:
+//
+//	if newSize <= cap(mant) {
+//		mant = mant[:newSize] // reuse mant
+//	}
 //
 // Bits is intended to support implementation of missing low-level Decimal
 // functionality outside this package; it should be avoided otherwise.
 func (x *Decimal) BitsExp() ([]Word, int32) {
-	return x.mant, x.exp
+	if x.form == finite {
+		return x.mant, x.exp
+	}
+	return x.mant[:0], x.exp
 }
 
-// SetBitsExp provides raw (unchecked but fast) access to z by setting its
-// mantissa to mant (interpreted as a little-endian Word slice) and exponent to
-// exp, returning z rounded to z.Prec(). The result and mant share the same
-// underlying array. If mant is not normalized, SetBitsExp will normalize it and
-// adjust the exponent accordingly.
+// SetBitsExp provides raw (checked, yet fast) access to z by setting it to a
+// positive number with mantissa mant (interpreted as a little-endian Word
+// slice) and exponent exp, returning z rounded to z.Prec(). The result and mant
+// share the same underlying array. If mant is not normalized, SetBitsExp will
+// normalize it and adjust the exponent accordingly.
 //
 // A mantissa is normalized when its most significant Word has a non-zero most
 // significant digit:
 //
 //  mant[len(mant)-1] / 10**(DigitsPerWord-1) != 0
 //
+// The mant argument must either be a newly created Word slice or obtained as a
+// result of a call to BitsExp with the same receiver.
+//
 // SetBitsExp is intended to support implementation of missing low-level Decimal
 // functionality outside this package; it should be avoided otherwise.
-func (z *Decimal) SetBitsExp(mant []Word, exp int32) *Decimal {
+func (z *Decimal) SetBitsExp(mant []Word, exp int64) *Decimal {
 	z.mant = dec(mant).norm()
 	z.neg = false
 	if len(z.mant) > 0 {
-		z.setExpAndRound(int64(exp)-dnorm(z.mant)-int64(len(mant)-len(z.mant))*_DW, 0)
+		z.setExpAndRound(exp-dnorm(z.mant)-int64(len(mant)-len(z.mant))*_DW, 0)
 	} else {
 		z.acc = Exact
 		z.form = zero

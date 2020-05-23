@@ -6,14 +6,28 @@
 Package decimal implements arbitrary-precision decimal floating-point
 arithmetic.
 
-The implementation is heavily based on big.Float and besides a few additional
-getters and setters for other math/big types, the API is identical to that of
-*big.Float.
+The implementation is heavily based on big.Float and the API is identical to
+that of *big.Float with the exception of a few additional getters and setters,
+an FMA operation, and helper functions to support implementation of missing
+low-level Decimal functionality outside this package (see the math sub-package).
 
 Howvever, and unlike big.Float, the mantissa of a decimal is stored in a
 little-endian Word slice as "declets" of 9 or 19 decimal digits per 32 or 64
 bits Word. All arithmetic operations are performed directly in base 10**9 or
 10**19 without conversion to/from binary.
+
+The mantissa of a Decimal is always normalized, that is the most significant
+digit of the mantissa is always a non-zero digit and:
+
+    0.1 <= mantissa < 1                       (1)
+
+The bounds for a finite Dicimal x are:
+
+    0.1 × 10**MinExp <= x < 1 × 10**MaxExp    (2)
+
+As a consequence to points (1) and (2), and unlike in the IEEE-754 standard, a
+finite Decimal can only be a normal number (no subnormal numbers) and there is
+no Quantize operation.
 
 The zero value for a Decimal corresponds to 0. Thus, new values can be declared
 in the usual ways and denote 0 without further initialization:

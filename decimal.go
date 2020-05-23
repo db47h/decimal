@@ -5,8 +5,6 @@
 package decimal
 
 import (
-	"encoding"
-	"encoding/gob"
 	"fmt"
 	"math"
 	"math/big"
@@ -24,19 +22,6 @@ const debugDecimal = true // enable for debugging
 // computations at no added performance or memory cost. Also 34 digits matches
 // the precision of IEEE-754 decimal128.
 const DefaultDecimalPrec = 34
-
-var decimalZero Decimal
-
-var (
-	// required implemented interfaces
-	_ fmt.Stringer             = &decimalZero
-	_ fmt.Scanner              = &decimalZero
-	_ fmt.Formatter            = &decimalZero
-	_ encoding.TextMarshaler   = &decimalZero
-	_ encoding.TextUnmarshaler = &decimalZero
-	_ gob.GobEncoder           = &decimalZero
-	_ gob.GobDecoder           = &decimalZero
-)
 
 // A nonzero finite Decimal represents a multi-precision decimal floating point
 // number
@@ -1641,8 +1626,4 @@ func (z *Decimal) SetBitsExp(mant []Word, exp int64) *Decimal {
 		z.exp = 0
 	}
 	return z
-}
-
-func (x *Decimal) mantDigits() int64 {
-	return int64(len(x.mant)) * _DW
 }

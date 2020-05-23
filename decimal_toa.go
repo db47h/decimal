@@ -162,6 +162,7 @@ func (x *Decimal) Append(buf []byte, fmt byte, prec int) []byte {
 // format fmt with precision prec.
 func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 	digits := int(x.MinPrec())
+	exp := x.MantExp(nil)
 	if digits == 0 {
 		digits = 1
 	}
@@ -171,7 +172,7 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 	}
 	switch fmt {
 	case 'e', 'E':
-		sz += 2 + expSz(x.exp)
+		sz += 2 + expSz(exp)
 		if prec < 0 {
 			sz += digits
 		} else {
@@ -181,14 +182,14 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 		sz += 1
 		if prec < 0 {
 			sz += digits
-			if x.exp < 0 || int(x.exp) > digits {
-				sz += abs(int(x.exp))
+			if exp < 0 || exp > digits {
+				sz += abs(exp)
 			}
 		} else {
-			sz += max(int(x.exp), 1) + prec
+			sz += max(int(exp), 1) + prec
 		}
 	case 'g':
-		sz += 2 + expSz(x.exp)
+		sz += 2 + expSz(exp)
 		if prec < 0 {
 			sz += digits
 		} else {
@@ -196,10 +197,10 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 		}
 	case 'b':
 		// -ddddde±dd
-		sz += len(x.mant)*_DW + 1 + expSz(x.exp)
+		sz += len(x.mant)*_DW + 1 + expSz(exp)
 	case 'p':
 		// -0.ddde±dd
-		sz += 2 + digits + 1 + expSz(x.exp)
+		sz += 2 + digits + 1 + expSz(exp)
 	default:
 		sz = prec
 	}
@@ -207,7 +208,7 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 	return max(4, sz)
 }
 
-func expSz(exp int32) int {
+func expSz(exp int) int {
 	var n int
 	if exp < 0 {
 		n = int(decDigits(uint(-exp))) + 1
@@ -221,11 +222,12 @@ func expSz(exp int32) int {
 // prec is # of digits after decimal point
 func (x *Decimal) fmtF(buf []byte, prec int) []byte {
 	mant := x.trimMant().utoa(10)
+	exp := x.MantExp(nil)
 	// integer, padded with zeros as needed
-	if x.exp > 0 {
-		m := min(int(x.MinPrec()), int(x.exp))
+	if exp > 0 {
+		m := min(int(x.MinPrec()), exp)
 		buf = append(buf, mant[:m]...)
-		for ; m < int(x.exp); m++ {
+		for ; m < exp; m++ {
 			buf = append(buf, '0')
 		}
 	} else {
@@ -236,7 +238,7 @@ func (x *Decimal) fmtF(buf []byte, prec int) []byte {
 	if prec > 0 {
 		buf = append(buf, '.')
 		for i := 0; i < prec; i++ {
-			n := int(x.exp) + i
+			n := exp + i
 			var ch byte = '0'
 			if 0 <= n && n < len(mant) {
 				ch = mant[n]
@@ -284,7 +286,7 @@ func (x *Decimal) fmtE(buf []byte, fmt byte, prec int) []byte {
 	buf = append(buf, fmt)
 	var exp int64
 	if len(mant) > 0 {
-		exp = int64(x.exp) - 1 // -1 because first digit was printed before '.'
+		exp = int64(x.MantExp(nil)) - 1 // -1 because first digit was printed before '.'
 	}
 	if exp < 0 {
 		ch = '-'
@@ -432,10 +434,13 @@ func (x *Decimal) Format(s fmt.State, format rune) {
 
 // trimMant returns x.mant with least significant zero Words removed
 func (x *Decimal) trimMant() dec {
-	m := x.mant
-	i := 0
-	for i < len(m) && m[i] == 0 {
-		i++
+	if x.form == finite {
+		m := x.mant
+		i := 0
+		for i < len(m) && m[i] == 0 {
+			i++
+		}
+		return m[i:]
 	}
-	return m[i:]
+	return nil
 }

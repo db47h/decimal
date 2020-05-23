@@ -440,7 +440,11 @@ func (x *Decimal) Float(z *big.Float) *big.Float {
 
 	switch x.form {
 	case zero:
-		return z.SetPrec(p)
+		z.SetPrec(p)
+		if x.neg != z.Signbit() {
+			z.Neg(z)
+		}
+		return z
 	case inf:
 		return z.SetInf(x.neg).SetPrec(p)
 	}
@@ -455,6 +459,9 @@ func (x *Decimal) Float(z *big.Float) *big.Float {
 	m := len(x.mant) * _DW
 	exp := int64(x.exp) - int64(m)
 	z = z.SetInt(&i)
+	if x.neg {
+		z.Neg(z)
+	}
 	// z = x·2**(m - x.exp)·5**(m - x.exp)
 
 	// normalize mantissa and apply 2 exponent

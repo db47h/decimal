@@ -221,8 +221,7 @@ func expSz(exp int) int {
 // %f: ddddddd.ddddd
 // prec is # of digits after decimal point
 func (x *Decimal) fmtF(buf []byte, prec int) []byte {
-	mant := x.trimMant().utoa(10)
-	exp := x.MantExp(nil)
+	mant, exp := x.toa(10)
 	// integer, padded with zeros as needed
 	if exp > 0 {
 		m := min(int(x.MinPrec()), exp)
@@ -253,7 +252,7 @@ func (x *Decimal) fmtF(buf []byte, prec int) []byte {
 // %e: d.ddddde±dd
 // prec is # of digits after decimal point
 func (x *Decimal) fmtE(buf []byte, fmt byte, prec int) []byte {
-	mant := x.trimMant().utoa(10)
+	mant, ex := x.toa(10)
 	// trim trailing zeros
 	n := len(mant)
 	for n > 0 && mant[n-1] == '0' {
@@ -286,7 +285,7 @@ func (x *Decimal) fmtE(buf []byte, fmt byte, prec int) []byte {
 	buf = append(buf, fmt)
 	var exp int64
 	if len(mant) > 0 {
-		exp = int64(x.MantExp(nil)) - 1 // -1 because first digit was printed before '.'
+		exp = int64(ex) - 1 // -1 because first digit was printed before '.'
 	}
 	if exp < 0 {
 		ch = '-'
@@ -315,7 +314,7 @@ func (x *Decimal) fmtB(buf []byte) []byte {
 	// x != 0
 
 	// adjust mantissa to use exactly x.prec bits
-	m := x.trimMant().utoa(10)
+	m, exp := x.toa(10)
 	if int(x.prec) < len(m) {
 		m = m[:x.prec]
 	}
@@ -325,7 +324,7 @@ func (x *Decimal) fmtB(buf []byte) []byte {
 		buf = append(buf, '0')
 	}
 	buf = append(buf, 'e')
-	e := int64(x.exp) - int64(x.prec)
+	e := int64(exp) - int64(x.prec)
 	if e >= 0 {
 		buf = append(buf, '+')
 	}
@@ -344,12 +343,13 @@ func (x *Decimal) fmtP(buf []byte) []byte {
 	// x != 0
 
 	buf = append(buf, "0."...)
-	buf = append(buf, bytes.TrimRight(x.trimMant().utoa(10), "0")...)
+	mant, exp := x.toa(10)
+	buf = append(buf, bytes.TrimRight(mant, "0")...)
 	buf = append(buf, 'p')
 	if x.exp >= 0 {
 		buf = append(buf, '+')
 	}
-	return strconv.AppendInt(buf, int64(x.exp), 10)
+	return strconv.AppendInt(buf, int64(exp), 10)
 }
 
 // Format implements fmt.Formatter. It accepts the regular formats for
@@ -432,15 +432,16 @@ func (x *Decimal) Format(s fmt.State, format rune) {
 	}
 }
 
-// trimMant returns x.mant with least significant zero Words removed
-func (x *Decimal) trimMant() dec {
+// toa returns x.mant.utoa(base) and x.exp with least significant zero Words removed
+// this function retuns nil, 0 for non-finite numbers.
+func (x *Decimal) toa(base int) ([]byte, int) {
 	if x.form == finite {
 		m := x.mant
 		i := 0
 		for i < len(m) && m[i] == 0 {
 			i++
 		}
-		return m[i:]
+		return m[i:].utoa(base), int(x.exp)
 	}
-	return nil
+	return nil, 0
 }

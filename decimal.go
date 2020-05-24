@@ -212,7 +212,7 @@ func (z *Decimal) uadd(x, y *Decimal) {
 	// http://www.vinc17.net/research/papers/rnc6.pdf
 
 	if debugDecimal {
-		validateBinaryOperands(x, y)
+		validateTernaryOperands(z, x, y)
 	}
 
 	// compute exponents ex, ey for mantissa with decimal point
@@ -220,13 +220,14 @@ func (z *Decimal) uadd(x, y *Decimal) {
 	ex := int64(x.exp) - int64(len(x.mant))*_DW
 	ey := int64(y.exp) - int64(len(y.mant))*_DW
 
-	al := alias(z.mant, x.mant) || alias(z.mant, y.mant)
-
-	// TODO(gri) having a combined add-and-shift primitive
-	//           could make this code significantly faster
+	// TODO(db47h) having a combined add-and-shift primitive
+	//             could make this code significantly faster
+	//             but this needs a version of shl that starts
+	//             from the least significant word and forbids
+	//             in-place shifts.
 	switch {
 	case ex < ey:
-		if al {
+		if same(z.mant, x.mant) {
 			t := dec(nil).shl(y.mant, uint(ey-ex))
 			z.mant = z.mant.add(x.mant, t)
 		} else {
@@ -237,7 +238,7 @@ func (z *Decimal) uadd(x, y *Decimal) {
 		// ex == ey, no shift needed
 		z.mant = z.mant.add(x.mant, y.mant)
 	case ex > ey:
-		if al {
+		if same(z.mant, y.mant) {
 			t := dec(nil).shl(x.mant, uint(ex-ey))
 			z.mant = z.mant.add(t, y.mant)
 		} else {
@@ -261,17 +262,15 @@ func (z *Decimal) usub(x, y *Decimal) {
 	// by special-casing, and the code will diverge.
 
 	if debugDecimal {
-		validateBinaryOperands(x, y)
+		validateTernaryOperands(z, x, y)
 	}
 
 	ex := int64(x.exp) - int64(len(x.mant))*_DW
 	ey := int64(y.exp) - int64(len(y.mant))*_DW
 
-	al := alias(z.mant, x.mant) || alias(z.mant, y.mant)
-
 	switch {
 	case ex < ey:
-		if al {
+		if same(z.mant, x.mant) {
 			t := dec(nil).shl(y.mant, uint(ey-ex))
 			z.mant = t.sub(x.mant, t)
 		} else {
@@ -282,7 +281,7 @@ func (z *Decimal) usub(x, y *Decimal) {
 		// ex == ey, no shift needed
 		z.mant = z.mant.sub(x.mant, y.mant)
 	case ex > ey:
-		if al {
+		if same(z.mant, y.mant) {
 			t := dec(nil).shl(x.mant, uint(ex-ey))
 			z.mant = t.sub(t, y.mant)
 		} else {
@@ -1458,6 +1457,20 @@ func validateBinaryOperands(x, y *Decimal) {
 	}
 	if len(y.mant) == 0 {
 		panic("empty mantissa for y")
+	}
+	// disallow aliasing of mantissae. i.e. prevent things like z.mant = x.mant[m:n]
+	if alias(x.mant, y.mant) && !same(x.mant, y.mant) {
+		panic("x.mant is an alias for y.mant")
+	}
+}
+
+func validateTernaryOperands(z, x, y *Decimal) {
+	validateBinaryOperands(x, y)
+	if alias(z.mant, y.mant) && !same(z.mant, y.mant) {
+		panic("z.mant is an alias for y.mant")
+	}
+	if alias(z.mant, x.mant) && !same(z.mant, x.mant) {
+		panic("z.mant is an alias for x.mant")
 	}
 }
 

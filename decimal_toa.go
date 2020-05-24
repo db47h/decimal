@@ -345,7 +345,7 @@ func (x *Decimal) fmtP(buf []byte) []byte {
 	buf = append(buf, "0."...)
 	mant, exp := x.toa(10)
 	buf = append(buf, bytes.TrimRight(mant, "0")...)
-	buf = append(buf, 'p')
+	buf = append(buf, 'e')
 	if x.exp >= 0 {
 		buf = append(buf, '+')
 	}
@@ -371,6 +371,11 @@ func (x *Decimal) Format(s fmt.State, format rune) {
 	case 'F':
 		// (*Decimal).Text doesn't support 'F'; handle like 'f'
 		format = 'f'
+	case 's':
+		format = 'g'
+		if !hasPrec {
+			prec = 10
+		}
 	case 'v':
 		// handle like 'g'
 		format = 'g'

@@ -519,9 +519,17 @@ func BenchmarkAddMul10VVW(b *testing.B) {
 }
 
 func BenchmarkShl10VU(b *testing.B) {
-	x := dec(rnd10V(1000))
-	z := dec(nil).make(1000)
+	x := dec(rnd10V(100000))
+	z := dec(nil).make(100000)
 	for i := 0; i < b.N; i++ {
 		z.shl(x, 8)
+	}
+}
+
+func BenchmarkShr10VU(b *testing.B) {
+	x := dec(rnd10V(100000))
+	z := dec(nil).make(100000)
+	for i := 0; i < b.N; i++ {
+		z.shr(x, 8)
 	}
 }

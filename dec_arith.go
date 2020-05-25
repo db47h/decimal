@@ -132,6 +132,67 @@ func decMaxPow(b Word) (p Word, n int) {
 	return Word(decMaxPow64[i]), int(decMaxPow64[i+1])
 }
 
+// pow10DivTab64 contains the "magic" numbers for fast division by 10**n
+// where 1 <= n < 19, x / 10**n = ((x >> pre) * m) >> (_W + post).
+// See https://gmplib.org/~tege/divcnst-pldi94.pdf
+// generated using Go's src/cmd/compile/internal/ssa/magic.go and rewritegeneric.go rules
+var pow10DivTab64 = [...]magic{
+	{10, 0xcccccccccccccccd, 0, 3},
+	{100, 0xa3d70a3d70a3d70b, 1, 5},
+	{1000, 0x83126e978d4fdf3c, 1, 8},
+	{10000, 0xd1b71758e219652c, 0, 13},
+	{100000, 0xa7c5ac471b478424, 1, 15},
+	{1000000, 0x8637bd05af6c69b6, 0, 19},
+	{10000000, 0xd6bf94d5e57a42bd, 1, 22},
+	{100000000, 0xabcc77118461cefd, 0, 26},
+	{1000000000, 0x89705f4136b4a598, 1, 28},
+	{10000000000, 0xdbe6fecebdedd5bf, 0, 33},
+	{100000000000, 0xafebff0bcb24aaff, 0, 36},
+	{1000000000000, 0x8cbccc096f5088cc, 0, 39},
+	{10000000000000, 0xe12e13424bb40e14, 1, 42},
+	{100000000000000, 0xb424dc35095cd810, 1, 45},
+	{1000000000000000, 0x901d7cf73ab0acda, 1, 48},
+	{10000000000000000, 0xe69594bec44de15c, 1, 52},
+	{100000000000000000, 0xb877aa3236a4b44a, 1, 55},
+	{1000000000000000000, 0x9392ee8e921d5d08, 1, 58},
+	{10000000000000000000, 0xec1e4a7db69561a6, 1, 62},
+}
+
+var pow10DivTab32 = [...]magic{
+	{10, 0xcccccccd, 0, 3},
+	{100, 0xa3d70a3e, 1, 5},
+	{1000, 0x83126e98, 0, 9},
+	{10000, 0xd1b71759, 0, 13},
+	{100000, 0xa7c5ac48, 1, 15},
+	{1000000, 0x8637bd06, 0, 19},
+	{10000000, 0xd6bf94d6, 0, 23},
+	{100000000, 0xabcc7712, 0, 26},
+	{1000000000, 0x89705f42, 1, 28},
+}
+
+type magic struct {
+	d    uint64 // divisor
+	m    uint64 // multiplier
+	pre  byte   // pre-shift
+	post byte   // post-shift
+}
+
+func divisorPow10(n uint) magic {
+	if debugDecimal && n == 0 {
+		panic("divisorPow10: 10**0 is not a valid divisor")
+	}
+	if _W == 32 {
+		return pow10DivTab32[n-1]
+	}
+	return pow10DivTab64[n-1]
+}
+
+func (m magic) div(n Word) (q, r Word) {
+	h, _ := bits.Mul(uint(n)>>m.pre, uint(m.m))
+	q = Word(h) >> m.post
+	return q, n - q*Word(m.d)
+}
+
 //-----------------------------------------------------------------------------
 // Arithmetic primitives
 //
@@ -231,12 +292,12 @@ func shl10VU_g(z, x []Word, s uint) (r Word) {
 	if len(z) == 0 || len(x) == 0 {
 		return
 	}
-	d, m := pow10(_DW-s), pow10(s)
+	d, m := divisorPow10(_DW-s), pow10(s)
 	var h, l Word
-	r, l = divWW(0, x[len(x)-1], d)
+	r, l = d.div(x[len(x)-1])
 	for i := len(z) - 1; i > 0; i-- {
 		t := l
-		h, l = divWW(0, x[i-1], d)
+		h, l = d.div(x[i-1])
 		z[i] = t*m + h
 	}
 	z[0] = l * m
@@ -255,11 +316,11 @@ func shr10VU_g(z, x []Word, s uint) (r Word) {
 	}
 
 	var h, l Word
-	d, m := pow10(s), pow10(_DW-s)
-	h, r = divWW(0, x[0], d)
+	d, m := divisorPow10(s), pow10(_DW-s)
+	h, r = d.div(x[0])
 	for i := 1; i < len(z) && i < len(x); i++ {
 		t := h
-		h, l = divWW(0, x[i], d)
+		h, l = d.div(x[i])
 		z[i-1] = t + l*m
 	}
 	z[len(z)-1] = h
@@ -304,9 +365,8 @@ func div10VWW_g(z, x []Word, y, xn Word) (r Word) {
 // This function uses the algorithm from "Division by invariant integers using
 // multiplication" by Torbjörn Granlund & Peter L. Montgomery.
 //
-// See https://doi.org/10.1145/773473.178249, section 8, Dividing udword by uword.
-//
-// On 386 and amd64, this is over 2 times faster than calling bits.Div(n1, n0, _BD).
+// See https://gmplib.org/~tege/divcnst-pldi94.pdf, section 8, Dividing udword
+// by uword.
 //
 // In the article, some equations show an addition or subtraction of 2**N, which
 // is a no-op. In the comments below, these have been removed for the sake of

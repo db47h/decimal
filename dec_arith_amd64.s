@@ -516,6 +516,7 @@ CE:
 
 // func shl10VU(z, x []Word, s uint) (c Word)
 TEXT ·shl10VU(SB),NOSPLIT,$0
+	// TODO(db47h): unroll loop
 	MOVQ z_len+8(FP), SI	// i = z
 	SUBQ $1, SI				// i--
 	JL X8b					// i < 0	(n <= 0)
@@ -528,34 +529,53 @@ TEXT ·shl10VU(SB),NOSPLIT,$0
 	JEQ X8c		// copy if s = 0
 
 	MOVQ $_DW, CX
-	LEAQ ·pow10tab(SB), DI
+	LEAQ ·pow10DivTab64(SB), DI
 	SUBQ BX, CX
-	MOVQ 0(DI)(BX*8), R12 // m = pow10(s)
-	MOVQ 0(DI)(CX*8), R11 // d = pow10(_DW-s)
+	LEAQ -3(BX)(BX*2), BX
+	LEAQ -3(CX)(CX*2), CX
 
-	XORQ DX, DX
+	MOVQ 0(DI)(BX*8), R12 // m = pow10DivTab64(s-1).d
+	LEAQ 0(DI)(CX*8), R11 // d = &pow10DivTab64(_DW-s-1)
+
+	// r, l = x[len(x)-1] / d
+	MOVQ 0(R11), R13		// d
+	MOVQ 8(R11), R14		// m
 	MOVQ 0(R8)(SI*8), AX
-	DIVQ R11		// AX:DX = x[len(x)-1] / d
-	MOVQ AX, BX		// save r
+	MOVQ AX, BX				// x[i]
+	MOVWLZX 16(R11), CX		// post|pre
+	SHRQ CX, AX				// x[i] >> pre
+	MULQ R14				// *m
+	RORW $8, CX				// post
 	MOVQ DX, AX
+	SHRQ CX, AX				// r
+	MOVQ AX, c+56(FP)		// save r
+	MULQ R13				// DX:AX = r*d
+	SUBQ AX, BX				// l = x[i]-r*d
+	MOVQ BX, AX				// AX = l
 
 	TESTQ SI, SI
 	JEQ X8a
 L8:
 	MULQ R12
-	MOVQ AX, CX		// z[i] = l*m
-	XORQ DX, DX
-	MOVQ -8(R8)(SI*8), AX
-	DIVQ R11		// q, r = div(0, x[i-1], d)
-	ADDQ AX, CX		// z[i] += q
-	MOVQ DX, AX
-	MOVQ CX, 0(R10)(SI*8)
+	MOVQ AX, R9				// z[i] = l*m
+	MOVQ -8(R8)(SI*8), AX	
+	MOVQ AX, BX				// x[i-1]
+	RORW $8, CX				// pre
+	SHRQ CX, AX				// x[i-1] >> pre
+	MULQ R14				// *m
+	RORW $8, CX				// post
+	MOVQ DX, AX			
+	SHRQ CX, AX				// h
+	ADDQ AX, R9				// z[i] += h
+	MOVQ R9, 0(R10)(SI*8)
+	MULQ R13				// DX:AX = d*h
+	SUBQ AX, BX				// l = x[i-1]-d*h
+	MOVQ BX, AX
 	SUBQ $1, SI
 	JG L8
 X8a:
 	MULQ R12
 	MOVQ AX, 0(R10)(SI*8)
-	MOVQ BX, c+56(FP)
 	RET
 X8b:
 	MOVQ $0, c+56(FP)
@@ -570,6 +590,7 @@ X8c:
 
 // func shr10VU(z, x []Word, s uint) (c Word)
 TEXT ·shr10VU(SB),NOSPLIT,$0
+	// TODO(db47h): implement constant division by multiplication, unroll loop.
 	MOVQ z_len+8(FP), DI
 	SUBQ $1, DI		// n--
 	JL X9b			// n < 0	(n <= 0)

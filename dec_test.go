@@ -745,6 +745,16 @@ func TestGoIssue37499(t *testing.T) {
 	}
 }
 
+var benchU uint
+
+func BenchmarkDecDigit(b *testing.B) {
+	x := dec(rnd10V(100))
+	for i := 0; i < b.N; i++ {
+		n := i % (100 * _DW)
+		benchU = x.digit(uint(n))
+	}
+}
+
 // TODO(bd47h): move this to decimal_test
 func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
 	aa := rndDec1(aSize)

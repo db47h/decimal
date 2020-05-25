@@ -31,7 +31,7 @@ var pow10tab = [...]uint64{
 
 func pow10(n uint) Word { return Word(pow10tab[n]) }
 
-var maxDigits = [...]uint{
+var pow2digitsTab = [...]uint{
 	1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5,
 	5, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10,
 	10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 15,
@@ -49,7 +49,7 @@ func decDigits(x uint) (n uint) {
 }
 
 func decDigits64(x uint64) (n uint) {
-	n = maxDigits[bits.Len64(x)]
+	n = pow2digitsTab[bits.Len64(x)]
 	if x < uint64(pow10(n-1)) {
 		n--
 	}
@@ -57,7 +57,7 @@ func decDigits64(x uint64) (n uint) {
 }
 
 func decDigits32(x uint) (n uint) {
-	n = maxDigits[bits.Len(x)]
+	n = pow2digitsTab[bits.Len(x)]
 	if x < uint(pow10(n-1)) {
 		n--
 	}

@@ -1262,79 +1262,78 @@ func TestDecimalInc(t *testing.T) {
 // Selected precisions with which to run various tests.
 var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 3000}
 
-// // Selected bits with which to run various tests.
-// // Each entry is a list of bits representing a floating-point number (see fromBits).
-// var bitsList = [...]Bits{
-// 	{},           // = 0
-// 	{0},          // = 1
-// 	{1},          // = 2
-// 	{-1},         // = 1/2
-// 	{10},         // = 2**10 == 1024
-// 	{-10},        // = 2**-10 == 1/1024
-// 	{100, 10, 1}, // = 2**100 + 2**10 + 2**1
-// 	{0, -1, -2, -10},
-// 	// TODO(gri) add more test cases
-// }
+// Selected values with which to run various tests.
+var valueList = [...]*IDec{
+	new(IDec).SetString("0"),
+	new(IDec).SetString("1"),
+	new(IDec).SetString("2"),
+	new(IDec).SetString("0.1"),
+	new(IDec).SetString("1e10"),
+	new(IDec).SetString("1e-10"),
+	new(IDec).SetString("50000001110005"),
+	new(IDec).SetString("0.50000001110005"),
+	new(IDec).SetString("5000000.1110005"),
+}
 
-// // TestFloatAdd tests Float.Add/Sub by comparing the result of a "manual"
-// // addition/subtraction of arguments represented by Bits values with the
-// // respective Float addition/subtraction for a variety of precisions
-// // and rounding modes.
-// func TestFloatAdd(t *testing.T) {
-// 	for _, xbits := range bitsList {
-// 		for _, ybits := range bitsList {
-// 			// exact values
-// 			x := xbits.Float()
-// 			y := ybits.Float()
-// 			zbits := xbits.add(ybits)
-// 			z := zbits.Float()
+// TestDecimalAdd tests Decimal.Add/Sub by comparing the result of a "manual"
+// addition/subtraction of arguments represented by Bits values with the
+// respective Decimal addition/subtraction for a variety of precisions
+// and rounding modes.
+func TestDecimalAdd(t *testing.T) {
+	for _, xi := range valueList {
+		for _, yi := range valueList {
+			// exact values
+			x := xi.Decimal()
+			y := yi.Decimal()
+			zi := xi.Add(yi)
+			z := zi.Decimal()
 
-// 			for i, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
-// 				for _, prec := range precList {
-// 					got := new(Float).SetPrec(prec).SetMode(mode)
-// 					got.Add(x, y)
-// 					want := zbits.round(prec, mode)
-// 					if got.Cmp(want) != 0 {
-// 						t.Errorf("i = %d, prec = %d, %s:\n\t     %s %v\n\t+    %s %v\n\t=    %s\n\twant %s",
-// 							i, prec, mode, x, xbits, y, ybits, got, want)
-// 					}
+			for i, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
+				for _, prec := range precList {
+					got := new(Decimal).SetPrec(prec).SetMode(mode)
+					got.Add(x, y)
+					want := zi.Round(prec, mode)
+					if got.Cmp(want) != 0 {
+						t.Errorf("i = %d, prec = %d, %s:\n\t     %s %v\n\t+    %s %v\n\t=    %s\n\twant %s",
+							i, prec, mode, x, xi, y, yi, got, want)
+					}
 
-// 					got.Sub(z, x)
-// 					want = ybits.round(prec, mode)
-// 					if got.Cmp(want) != 0 {
-// 						t.Errorf("i = %d, prec = %d, %s:\n\t     %s %v\n\t-    %s %v\n\t=    %s\n\twant %s",
-// 							i, prec, mode, z, zbits, x, xbits, got, want)
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+					got.Sub(z, x)
+					want = yi.Round(prec, mode)
+					if got.Cmp(want) != 0 {
+						t.Errorf("i = %d, prec = %d, %s:\n\t     %s %v\n\t-    %s %v\n\t=    %s\n\twant %s",
+							i, prec, mode, z, zi, x, xi, got, want)
+					}
+				}
+			}
+		}
+	}
+}
 
-// // TestFloatAddRoundZero tests Float.Add/Sub rounding when the result is exactly zero.
-// // x + (-x) or x - x for non-zero x should be +0 in all cases except when
-// // the rounding mode is ToNegativeInf in which case it should be -0.
-// func TestFloatAddRoundZero(t *testing.T) {
-// 	for _, mode := range [...]RoundingMode{ToNearestEven, ToNearestAway, ToZero, AwayFromZero, ToPositiveInf, ToNegativeInf} {
-// 		x := NewFloat(5.0)
-// 		y := new(Float).Neg(x)
-// 		want := NewFloat(0.0)
-// 		if mode == ToNegativeInf {
-// 			want.Neg(want)
-// 		}
-// 		got := new(Float).SetMode(mode)
-// 		got.Add(x, y)
-// 		if got.Cmp(want) != 0 || got.neg != (mode == ToNegativeInf) {
-// 			t.Errorf("%s:\n\t     %v\n\t+    %v\n\t=    %v\n\twant %v",
-// 				mode, x, y, got, want)
-// 		}
-// 		got.Sub(x, x)
-// 		if got.Cmp(want) != 0 || got.neg != (mode == ToNegativeInf) {
-// 			t.Errorf("%v:\n\t     %v\n\t-    %v\n\t=    %v\n\twant %v",
-// 				mode, x, x, got, want)
-// 		}
-// 	}
-// }
+// TestDecimalAddRoundZero tests Decimal.Add/Sub rounding when the result is exactly zero.
+// x + (-x) or x - x for non-zero x should be +0 in all cases except when
+// the rounding mode is ToNegativeInf in which case it should be -0.
+func TestDecimalAddRoundZero(t *testing.T) {
+	for _, mode := range [...]RoundingMode{ToNearestEven, ToNearestAway, ToZero, AwayFromZero, ToPositiveInf, ToNegativeInf} {
+		x := NewDecimal(5, 0)
+		y := new(Decimal).Neg(x)
+		want := NewDecimal(0, 0)
+		if mode == ToNegativeInf {
+			want.Neg(want)
+		}
+		got := new(Decimal).SetMode(mode)
+		got.Add(x, y)
+		if got.Cmp(want) != 0 || got.neg != (mode == ToNegativeInf) {
+			t.Errorf("%s:\n\t     %v\n\t+    %v\n\t=    %v\n\twant %v",
+				mode, x, y, got, want)
+		}
+		got.Sub(x, x)
+		if got.Cmp(want) != 0 || got.neg != (mode == ToNegativeInf) {
+			t.Errorf("%v:\n\t     %v\n\t-    %v\n\t=    %v\n\twant %v",
+				mode, x, x, got, want)
+		}
+	}
+}
 
 // // TestFloatAdd32 tests that Float.Add/Sub of numbers with
 // // 24bit mantissa behaves like float32 addition/subtraction
@@ -1403,71 +1402,71 @@ var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 
 // 	}
 // }
 
-// func TestIssue20490(t *testing.T) {
-// 	var tests = []struct {
-// 		a, b float64
-// 	}{
-// 		{4, 1},
-// 		{-4, 1},
-// 		{4, -1},
-// 		{-4, -1},
-// 	}
+func TestGoIssue20490(t *testing.T) {
+	var tests = []struct {
+		a, b float64
+	}{
+		{4, 1},
+		{-4, 1},
+		{4, -1},
+		{-4, -1},
+	}
 
-// 	for _, test := range tests {
-// 		a, b := NewFloat(test.a), NewFloat(test.b)
-// 		diff := new(Float).Sub(a, b)
-// 		b.Sub(a, b)
-// 		if b.Cmp(diff) != 0 {
-// 			t.Errorf("got %g - %g = %g; want %g\n", a, NewFloat(test.b), b, diff)
-// 		}
+	for _, test := range tests {
+		a, b := new(Decimal).SetFloat64(test.a), new(Decimal).SetFloat64(test.b)
+		diff := new(Decimal).Sub(a, b)
+		b.Sub(a, b)
+		if b.Cmp(diff) != 0 {
+			t.Errorf("got %g - %g = %g; want %g\n", a, new(Decimal).SetFloat64(test.b), b, diff)
+		}
 
-// 		b = NewFloat(test.b)
-// 		sum := new(Float).Add(a, b)
-// 		b.Add(a, b)
-// 		if b.Cmp(sum) != 0 {
-// 			t.Errorf("got %g + %g = %g; want %g\n", a, NewFloat(test.b), b, sum)
-// 		}
+		b = new(Decimal).SetFloat64(test.b)
+		sum := new(Decimal).Add(a, b)
+		b.Add(a, b)
+		if b.Cmp(sum) != 0 {
+			t.Errorf("got %g + %g = %g; want %g\n", a, new(Decimal).SetFloat64(test.b), b, sum)
+		}
 
-// 	}
-// }
+	}
+}
 
-// // TestFloatMul tests Float.Mul/Quo by comparing the result of a "manual"
-// // multiplication/division of arguments represented by Bits values with the
-// // respective Float multiplication/division for a variety of precisions
-// // and rounding modes.
-// func TestFloatMul(t *testing.T) {
-// 	for _, xbits := range bitsList {
-// 		for _, ybits := range bitsList {
-// 			// exact values
-// 			x := xbits.Float()
-// 			y := ybits.Float()
-// 			zbits := xbits.mul(ybits)
-// 			z := zbits.Float()
+// TestDecimalMul tests Decimal.Mul/Quo by comparing the result of a "manual"
+// multiplication/division of arguments represented by Bits values with the
+// respective Decimal multiplication/division for a variety of precisions
+// and rounding modes.
+func TestDecimalMul(t *testing.T) {
+	for _, xi := range valueList {
+		for _, yi := range valueList {
+			// exact values
+			x := xi.Decimal()
+			y := yi.Decimal()
+			zi := xi.Mul(yi)
+			z := zi.Decimal()
 
-// 			for i, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
-// 				for _, prec := range precList {
-// 					got := new(Float).SetPrec(prec).SetMode(mode)
-// 					got.Mul(x, y)
-// 					want := zbits.round(prec, mode)
-// 					if got.Cmp(want) != 0 {
-// 						t.Errorf("i = %d, prec = %d, %s:\n\t     %v %v\n\t*    %v %v\n\t=    %v\n\twant %v",
-// 							i, prec, mode, x, xbits, y, ybits, got, want)
-// 					}
+			for i, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
+				for _, prec := range precList {
+					got := new(Decimal).SetPrec(prec).SetMode(mode)
+					got.Mul(x, y)
+					want := zi.Round(prec, mode)
+					if got.Cmp(want) != 0 {
+						t.Errorf("i = %d, prec = %d, %s:\n\t     %v %v\n\t*    %v %v\n\t=    %v\n\twant %v",
+							i, prec, mode, x, xi, y, yi, got, want)
+					}
 
-// 					if x.Sign() == 0 {
-// 						continue // ignore div-0 case (not invertable)
-// 					}
-// 					got.Quo(z, x)
-// 					want = ybits.round(prec, mode)
-// 					if got.Cmp(want) != 0 {
-// 						t.Errorf("i = %d, prec = %d, %s:\n\t     %v %v\n\t/    %v %v\n\t=    %v\n\twant %v",
-// 							i, prec, mode, z, zbits, x, xbits, got, want)
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+					if x.Sign() == 0 {
+						continue // ignore div-0 case (not invertable)
+					}
+					got.Quo(z, x)
+					want = yi.Round(prec, mode)
+					if got.Cmp(want) != 0 {
+						t.Errorf("i = %d, prec = %d, %s:\n\t     %v %v\n\t/    %v %v\n\t=    %v\n\twant %v",
+							i, prec, mode, z, zi, x, xi, got, want)
+					}
+				}
+			}
+		}
+	}
+}
 
 // // TestFloatMul64 tests that Float.Mul/Quo of numbers with
 // // 53bit mantissa behaves like float64 multiplication/division.
@@ -1520,100 +1519,102 @@ var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 
 // 	}
 // }
 
-// func TestIssue6866(t *testing.T) {
-// 	for _, prec := range precList {
-// 		two := new(Float).SetPrec(prec).SetInt64(2)
-// 		one := new(Float).SetPrec(prec).SetInt64(1)
-// 		three := new(Float).SetPrec(prec).SetInt64(3)
-// 		msix := new(Float).SetPrec(prec).SetInt64(-6)
-// 		psix := new(Float).SetPrec(prec).SetInt64(+6)
+func TestGoIssue6866(t *testing.T) {
+	for _, prec := range precList {
+		two := new(Decimal).SetPrec(prec).SetInt64(2)
+		one := new(Decimal).SetPrec(prec).SetInt64(1)
+		three := new(Decimal).SetPrec(prec).SetInt64(3)
+		msix := new(Decimal).SetPrec(prec).SetInt64(-6)
+		psix := new(Decimal).SetPrec(prec).SetInt64(+6)
 
-// 		p := new(Float).SetPrec(prec)
-// 		z1 := new(Float).SetPrec(prec)
-// 		z2 := new(Float).SetPrec(prec)
+		p := new(Decimal).SetPrec(prec)
+		z1 := new(Decimal).SetPrec(prec)
+		z2 := new(Decimal).SetPrec(prec)
 
-// 		// z1 = 2 + 1.0/3*-6
-// 		p.Quo(one, three)
-// 		p.Mul(p, msix)
-// 		z1.Add(two, p)
+		// z1 = 2 + 1.0/3*-6
+		p.Quo(one, three)
+		p.Mul(p, msix)
+		z1.Add(two, p)
 
-// 		// z2 = 2 - 1.0/3*+6
-// 		p.Quo(one, three)
-// 		p.Mul(p, psix)
-// 		z2.Sub(two, p)
+		// z2 = 2 - 1.0/3*+6
+		p.Quo(one, three)
+		p.Mul(p, psix)
+		z2.Sub(two, p)
 
-// 		if z1.Cmp(z2) != 0 {
-// 			t.Fatalf("prec %d: got z1 = %v != z2 = %v; want z1 == z2\n", prec, z1, z2)
-// 		}
-// 		if z1.Sign() != 0 {
-// 			t.Errorf("prec %d: got z1 = %v; want 0", prec, z1)
-// 		}
-// 		if z2.Sign() != 0 {
-// 			t.Errorf("prec %d: got z2 = %v; want 0", prec, z2)
-// 		}
-// 	}
-// }
+		if z1.Cmp(z2) != 0 {
+			t.Fatalf("prec %d: got z1 = %v != z2 = %v; want z1 == z2\n", prec, z1, z2)
+		}
+		if z1.Sign() != 0 {
+			t.Errorf("prec %d: got z1 = %v; want 0", prec, z1)
+		}
+		if z2.Sign() != 0 {
+			t.Errorf("prec %d: got z2 = %v; want 0", prec, z2)
+		}
+	}
+}
 
-// func TestFloatQuo(t *testing.T) {
-// 	// TODO(gri) make the test vary these precisions
-// 	preci := 200 // precision of integer part
-// 	precf := 20  // precision of fractional part
+func TestDecimalQuo(t *testing.T) {
+	// TODO(db47h) make the test vary these precisions
+	preci := 200 // precision of integer part
+	precf := 20  // precision of fractional part
 
-// 	for i := 0; i < 8; i++ {
-// 		// compute accurate (not rounded) result z
-// 		bits := Bits{preci - 1}
-// 		if i&3 != 0 {
-// 			bits = append(bits, 0)
-// 		}
-// 		if i&2 != 0 {
-// 			bits = append(bits, -1)
-// 		}
-// 		if i&1 != 0 {
-// 			bits = append(bits, -precf)
-// 		}
-// 		z := bits.Float()
+	for i := 0; i < 8; i++ {
+		id := new(IDec)
+		intPow10(&id.mant, int32(preci-1))
+		if i&3 != 0 {
+			id.mant.Add(&id.mant, iOne)
+		}
+		if i&2 != 0 {
+			id = id.Add(new(IDec).SetMantExp(iOne, -1))
+		}
+		if i&3 != 0 {
+			id = id.Add(new(IDec).SetMantExp(iOne, -int32(precf)))
+		}
+		z := id.Decimal()
 
-// 		// compute accurate x as z*y
-// 		y := NewFloat(3.14159265358979323e123)
+		// compute accurate x as z*y
+		y := new(Decimal).SetFloat64(3.14159265358979323e123)
 
-// 		x := new(Float).SetPrec(z.Prec() + y.Prec()).SetMode(ToZero)
-// 		x.Mul(z, y)
+		x := new(Decimal).SetPrec(z.Prec() + y.Prec()).SetMode(ToZero)
+		x.Mul(z, y)
 
-// 		// leave for debugging
-// 		// fmt.Printf("x = %s\ny = %s\nz = %s\n", x, y, z)
+		// leave for debugging
+		// fmt.Printf("x = %s\ny = %s\nz = %s\n", x, y, z)
 
-// 		if got := x.Acc(); got != Exact {
-// 			t.Errorf("got acc = %s; want exact", got)
-// 		}
+		if got := x.Acc(); got != Exact {
+			t.Errorf("got acc = %s; want exact", got)
+		}
 
-// 		// round accurate z for a variety of precisions and
-// 		// modes and compare against result of x / y.
-// 		for _, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
-// 			for d := -5; d < 5; d++ {
-// 				prec := uint(preci + d)
-// 				got := new(Float).SetPrec(prec).SetMode(mode).Quo(x, y)
-// 				want := bits.round(prec, mode)
-// 				if got.Cmp(want) != 0 {
-// 					t.Errorf("i = %d, prec = %d, %s:\n\t     %s\n\t/    %s\n\t=    %s\n\twant %s",
-// 						i, prec, mode, x, y, got, want)
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+		// round accurate z for a variety of precisions and
+		// modes and compare against result of x / y.
+		for _, mode := range [...]RoundingMode{ToZero, ToNearestEven, AwayFromZero} {
+			for d := -5; d < 5; d++ {
+				prec := uint(preci + d)
+				got := new(Decimal).SetPrec(prec).SetMode(mode).Quo(x, y)
+				want := id.Round(prec, mode)
+				if got.Cmp(want) != 0 {
+					t.Errorf("i = %d, prec = %d, %s:\n\t     %s\n\t/    %s\n\t=    %s\n\twant %s",
+						i, prec, mode, x, y, got, want)
+				}
+			}
+		}
+	}
+}
 
 // var long = flag.Bool("long", false, "run very long tests")
 
-// // TestFloatQuoSmoke tests all divisions x/y for values x, y in the range [-n, +n];
+// // TODO(db47h): like similar tests, this test needs to be moved to a separate package and its results compared
+// // against a C implementation of decimal64
+// // TestDecimalQuoSmoke tests all divisions x/y for values x, y in the range [-n, +n];
 // // it serves as a smoke test for basic correctness of division.
-// func TestFloatQuoSmoke(t *testing.T) {
+// func TestDecimalQuoSmoke(t *testing.T) {
 // 	n := 10
 // 	if *long {
 // 		n = 1000
 // 	}
 
-// 	const dprec = 3         // max. precision variation
-// 	const prec = 10 + dprec // enough bits to hold n precisely
+// 	const dprec = 1        // max. precision variation
+// 	const prec = 4 + dprec // enough bits to hold n precisely
 // 	for x := -n; x <= n; x++ {
 // 		for y := -n; y < n; y++ {
 // 			if y == 0 {
@@ -1627,13 +1628,13 @@ var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 
 // 			// vary operand precision (only ok as long as a, b can be represented correctly)
 // 			for ad := -dprec; ad <= dprec; ad++ {
 // 				for bd := -dprec; bd <= dprec; bd++ {
-// 					A := new(Float).SetPrec(uint(prec + ad)).SetFloat64(a)
-// 					B := new(Float).SetPrec(uint(prec + bd)).SetFloat64(b)
-// 					C := new(Float).SetPrec(53).Quo(A, B) // C has float64 mantissa width
+// 					A := new(Decimal).SetPrec(uint(prec + ad)).SetInt64(int64(x))
+// 					B := new(Decimal).SetPrec(uint(prec + bd)).SetInt64(int64(y))
+// 					C := new(Decimal).SetPrec(17).Quo(A, B) // C has float64 mantissa width
 
 // 					cc, acc := C.Float64()
 // 					if cc != c {
-// 						t.Errorf("%g/%g = %s; want %.5g\n", a, b, C.Text('g', 5), c)
+// 						t.Errorf("%g/%g = %s; want %.5g (delta %g)\n", a, b, C.Text('g', 5), c, cc-c)
 // 						continue
 // 					}
 // 					if acc != Exact {
@@ -1645,81 +1646,81 @@ var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 
 // 	}
 // }
 
-// // TestFloatArithmeticSpecialValues tests that Float operations produce the
-// // correct results for combinations of zero (±0), finite (±1 and ±2.71828),
-// // and infinite (±Inf) operands.
-// func TestFloatArithmeticSpecialValues(t *testing.T) {
-// 	zero := 0.0
-// 	args := []float64{math.Inf(-1), -2.71828, -1, -zero, zero, 1, 2.71828, math.Inf(1)}
-// 	xx := new(Float)
-// 	yy := new(Float)
-// 	got := new(Float)
-// 	want := new(Float)
-// 	for i := 0; i < 4; i++ {
-// 		for _, x := range args {
-// 			xx.SetFloat64(x)
-// 			// check conversion is correct
-// 			// (no need to do this for y, since we see exactly the
-// 			// same values there)
-// 			if got, acc := xx.Float64(); got != x || acc != Exact {
-// 				t.Errorf("Float(%g) == %g (%s)", x, got, acc)
-// 			}
-// 			for _, y := range args {
-// 				yy.SetFloat64(y)
-// 				var (
-// 					op string
-// 					z  float64
-// 					f  func(z, x, y *Float) *Float
-// 				)
-// 				switch i {
-// 				case 0:
-// 					op = "+"
-// 					z = x + y
-// 					f = (*Float).Add
-// 				case 1:
-// 					op = "-"
-// 					z = x - y
-// 					f = (*Float).Sub
-// 				case 2:
-// 					op = "*"
-// 					z = x * y
-// 					f = (*Float).Mul
-// 				case 3:
-// 					op = "/"
-// 					z = x / y
-// 					f = (*Float).Quo
-// 				default:
-// 					panic("unreachable")
-// 				}
-// 				var errnan bool // set if execution of f panicked with ErrNaN
-// 				// protect execution of f
-// 				func() {
-// 					defer func() {
-// 						if p := recover(); p != nil {
-// 							_ = p.(ErrNaN) // re-panic if not ErrNaN
-// 							errnan = true
-// 						}
-// 					}()
-// 					f(got, xx, yy)
-// 				}()
-// 				if math.IsNaN(z) {
-// 					if !errnan {
-// 						t.Errorf("%5g %s %5g = %5s; want ErrNaN panic", x, op, y, got)
-// 					}
-// 					continue
-// 				}
-// 				if errnan {
-// 					t.Errorf("%5g %s %5g panicked with ErrNan; want %5s", x, op, y, want)
-// 					continue
-// 				}
-// 				want.SetFloat64(z)
-// 				if !alike(got, want) {
-// 					t.Errorf("%5g %s %5g = %5s; want %5s", x, op, y, got, want)
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+// TestDecimalArithmeticSpecialValues tests that Decimal operations produce the
+// correct results for combinations of zero (±0), finite (±1 and ±2.71828),
+// and infinite (±Inf) operands.
+func TestDecimalArithmeticSpecialValues(t *testing.T) {
+	zero := 0.0
+	args := []float64{math.Inf(-1), -2.71828, -1, -zero, zero, 1, 2.71828, math.Inf(1)}
+	xx := new(Decimal)
+	yy := new(Decimal)
+	got := new(Decimal)
+	want := new(Decimal)
+	for i := 0; i < 4; i++ {
+		for _, x := range args {
+			xx.SetFloat64(x)
+			// check conversion is correct
+			// (no need to do this for y, since we see exactly the
+			// same values there)
+			if got, acc := xx.Float64(); got != x /* || acc != Exact */ {
+				t.Errorf("Float(%g) == %g (%s)", x, got, acc)
+			}
+			for _, y := range args {
+				yy.SetFloat64(y)
+				var (
+					op string
+					z  float64
+					f  func(z, x, y *Decimal) *Decimal
+				)
+				switch i {
+				case 0:
+					op = "+"
+					z = x + y
+					f = (*Decimal).Add
+				case 1:
+					op = "-"
+					z = x - y
+					f = (*Decimal).Sub
+				case 2:
+					op = "*"
+					z = x * y
+					f = (*Decimal).Mul
+				case 3:
+					op = "/"
+					z = x / y
+					f = (*Decimal).Quo
+				default:
+					panic("unreachable")
+				}
+				var errnan bool // set if execution of f panicked with ErrNaN
+				// protect execution of f
+				func() {
+					defer func() {
+						if p := recover(); p != nil {
+							_ = p.(ErrNaN) // re-panic if not ErrNaN
+							errnan = true
+						}
+					}()
+					f(got, xx, yy)
+				}()
+				if math.IsNaN(z) {
+					if !errnan {
+						t.Errorf("%5g %s %5g = %5s; want ErrNaN panic", x, op, y, got)
+					}
+					continue
+				}
+				if errnan {
+					t.Errorf("%5g %s %5g panicked with ErrNan; want %5s", x, op, y, want)
+					continue
+				}
+				gotf, _ := got.Float64()
+				if math.Signbit(z) != got.Signbit() || z != gotf {
+					t.Errorf("%5g %s %5g = %5s; want %5s", x, op, y, got, want)
+				}
+			}
+		}
+	}
+}
 
 // func TestFloatArithmeticOverflow(t *testing.T) {
 // 	for _, test := range []struct {
@@ -1872,40 +1873,40 @@ var precList = [...]uint{1, 2, 5, 8, 10, 16, 17, 19, 34, 38, 50, 100, 250, 300, 
 // 	}
 // }
 
-// func BenchmarkFloatAdd(b *testing.B) {
-// 	x := new(Float)
-// 	y := new(Float)
-// 	z := new(Float)
+func BenchmarkDecimalAdd(b *testing.B) {
+	x := new(Decimal)
+	y := new(Decimal)
+	z := new(Decimal)
 
-// 	for _, prec := range []uint{10, 1e2, 1e3, 1e4, 1e5} {
-// 		x.SetPrec(prec).SetRat(NewRat(1, 3))
-// 		y.SetPrec(prec).SetRat(NewRat(1, 6))
-// 		z.SetPrec(prec)
+	for _, prec := range []uint{3, 30, 300, 3000, 30000} {
+		x.SetPrec(prec).SetRat(big.NewRat(1, 3))
+		y.SetPrec(prec).SetRat(big.NewRat(1, 6))
+		z.SetPrec(prec)
 
-// 		b.Run(fmt.Sprintf("%v", prec), func(b *testing.B) {
-// 			b.ReportAllocs()
-// 			for i := 0; i < b.N; i++ {
-// 				z.Add(x, y)
-// 			}
-// 		})
-// 	}
-// }
+		b.Run(fmt.Sprintf("%v", prec), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				z.Add(x, y)
+			}
+		})
+	}
+}
 
-// func BenchmarkFloatSub(b *testing.B) {
-// 	x := new(Float)
-// 	y := new(Float)
-// 	z := new(Float)
+func BenchmarkDecimalSub(b *testing.B) {
+	x := new(Decimal)
+	y := new(Decimal)
+	z := new(Decimal)
 
-// 	for _, prec := range []uint{10, 1e2, 1e3, 1e4, 1e5} {
-// 		x.SetPrec(prec).SetRat(NewRat(1, 3))
-// 		y.SetPrec(prec).SetRat(NewRat(1, 6))
-// 		z.SetPrec(prec)
+	for _, prec := range []uint{3, 30, 300, 3000, 30000} {
+		x.SetPrec(prec).SetRat(big.NewRat(1, 3))
+		y.SetPrec(prec).SetRat(big.NewRat(1, 6))
+		z.SetPrec(prec)
 
-// 		b.Run(fmt.Sprintf("%v", prec), func(b *testing.B) {
-// 			b.ReportAllocs()
-// 			for i := 0; i < b.N; i++ {
-// 				z.Sub(x, y)
-// 			}
-// 		})
-// 	}
-// }
+		b.Run(fmt.Sprintf("%v", prec), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				z.Sub(x, y)
+			}
+		})
+	}
+}

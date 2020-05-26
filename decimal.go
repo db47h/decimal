@@ -10,7 +10,7 @@ import (
 	"math/big"
 )
 
-const debugDecimal = true // enable for debugging
+const debugDecimal = false // enable for debugging
 
 // DefaultDecimalPrec is the default minimum precision used when creating a new
 // Decimal from a *big.Int, *big.Rat, uint64, int64, or string. An uint64

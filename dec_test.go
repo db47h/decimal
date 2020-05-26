@@ -755,8 +755,7 @@ func BenchmarkDecDigit(b *testing.B) {
 	}
 }
 
-// TODO(bd47h): move this to decimal_test
-func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
+func benchmarkDecDiv(b *testing.B, aSize, bSize int) {
 	aa := rndDec1(aSize)
 	bb := rndDec1(bSize)
 	if aa.cmp(bb) < 0 {
@@ -771,12 +770,12 @@ func benchmarkDecimalDiv(b *testing.B, aSize, bSize int) {
 	}
 }
 
-func BenchmarkDecimalDiv(b *testing.B) {
-	sizes := []int{10, 20, 50, 100, 200, 500, 1000, 1e4}
+func BenchmarkDecDiv(b *testing.B) {
+	sizes := []int{9, 19, 34, 75, 150, 300, 3000, 3e4}
 	for _, i := range sizes {
 		j := 2 * i
 		b.Run(fmt.Sprintf("%d/%d", j, i), func(b *testing.B) {
-			benchmarkDecimalDiv(b, j, i)
+			benchmarkDecDiv(b, j, i)
 		})
 	}
 }

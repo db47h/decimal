@@ -528,53 +528,51 @@ TEXT ·shl10VU(SB),NOSPLIT,$0
 	TESTQ BX, BX
 	JEQ X8c		// copy if s = 0
 
-	MOVQ $_DW, CX
+	MOVQ $_DW, AX
 	LEAQ ·pow10DivTab64(SB), DI
-	SUBQ BX, CX
+	SUBQ BX, AX
+	LEAQ -3(AX)(AX*2), AX
 	LEAQ -3(BX)(BX*2), BX
-	LEAQ -3(CX)(CX*2), CX
-
-	MOVQ 0(DI)(BX*8), R12 // m = pow10DivTab64(s-1).d
-	LEAQ 0(DI)(CX*8), R11 // d = &pow10DivTab64(_DW-s-1)
+	MOVQ 0(DI)(BX*8), R11 		// m = pow10DivTab64(s-1).d
+	MOVQ 0(DI)(AX*8), R12		// d
+	MOVQ 8(DI)(AX*8), R13		// m'
+	MOVWLZX 16(DI)(AX*8), CX	// post|pre
 
 	// r, l = x[len(x)-1] / d
-	MOVQ 0(R11), R13		// d
-	MOVQ 8(R11), R14		// m
 	MOVQ 0(R8)(SI*8), AX
 	MOVQ AX, BX				// x[i]
-	MOVWLZX 16(R11), CX		// post|pre
 	SHRQ CX, AX				// x[i] >> pre
-	MULQ R14				// *m
+	MULQ R13				// *m'
 	RORW $8, CX				// post
 	MOVQ DX, AX
 	SHRQ CX, AX				// r
 	MOVQ AX, c+56(FP)		// save r
-	MULQ R13				// DX:AX = r*d
+	MULQ R12				// DX:AX = r*d
 	SUBQ AX, BX				// l = x[i]-r*d
 	MOVQ BX, AX				// AX = l
 
 	TESTQ SI, SI
 	JEQ X8a
 L8:
-	MULQ R12
+	MULQ R11
 	MOVQ AX, R9				// z[i] = l*m
 	MOVQ -8(R8)(SI*8), AX	
 	MOVQ AX, BX				// x[i-1]
 	RORW $8, CX				// pre
 	SHRQ CX, AX				// x[i-1] >> pre
-	MULQ R14				// *m
+	MULQ R13				// *m'
 	RORW $8, CX				// post
 	MOVQ DX, AX			
 	SHRQ CX, AX				// h
 	ADDQ AX, R9				// z[i] += h
 	MOVQ R9, 0(R10)(SI*8)
-	MULQ R13				// DX:AX = d*h
+	MULQ R12				// DX:AX = d*h
 	SUBQ AX, BX				// l = x[i-1]-d*h
 	MOVQ BX, AX
 	SUBQ $1, SI
 	JG L8
 X8a:
-	MULQ R12
+	MULQ R11
 	MOVQ AX, 0(R10)(SI*8)
 	RET
 X8b:
@@ -602,41 +600,56 @@ TEXT ·shr10VU(SB),NOSPLIT,$0
 	TESTQ BX, BX
 	JEQ X9c		// copy if s = 0
 
-	MOVQ $_DW, CX
-	LEAQ ·pow10tab(SB), SI
-	SUBQ BX, CX
-	MOVQ 0(SI)(BX*8), R11 // d = pow10(s)
-	MOVQ 0(SI)(CX*8), R12 // m = pow10(_DW-s)
+	MOVQ $_DW, AX
+	LEAQ ·pow10DivTab64(SB), SI
+	SUBQ BX, AX
+	LEAQ -3(AX)(AX*2), AX
+	LEAQ -3(BX)(BX*2), BX
+	MOVQ 0(SI)(AX*8), R11 		// m = pow10DivTab64(_DW-s-1).d
+	MOVQ 0(SI)(BX*8), R12		// d
+	MOVQ 8(SI)(BX*8), R13		// m'
+	MOVWLZX 16(SI)(BX*8), CX	// post|pre
 
-	XORQ DX, DX
-	MOVQ 0(R8), AX
-	DIVQ R11		// AX:DX = x[0] / d
-	MOVQ DX, R13	// r
-	MOVQ AX, BX		// h
+	MOVQ 0(R8), AX		// x[0]
+	MOVQ AX, R9			
+	SHRQ CX, AX			// x[0] >> pre
+	MULQ R13			// *m'
+	RORW $8, CX			// post
+	SHRQ CX, DX			// h
+	MOVQ DX, BX
+	MOVQ R12, AX
+	MULQ DX				// DX:AX = h*d
+	SUBQ AX, R9			// r = x[0]-h*d
+	MOVQ R11, AX
+	MULQ R9
+	MOVQ AX, c+56(FP)	// save r*m
 
 	MOVQ $0, SI
 	CMPQ SI, DI
 	JGE X9a			// if i >= len(x)-1 goto X9a
 
 L9:
-	MOVQ BX, CX		// z[i] = h
-	XORQ DX, DX
+	MOVQ BX, R9		// z[i] = h
 	MOVQ 8(R8)(SI*8), AX
-	DIVQ R11		// h, l = AX:DX = divWW(x[i], d)
-	MOVQ AX, BX		// save h
-	MOVQ DX, AX
-	XORQ DX, DX
-	MULQ R12		// AX = l*m
-	ADDQ AX, CX		// zi += l*m
-	MOVQ CX, 0(R10)(SI*8)
+	MOVQ AX, R14	// x[i+1]
+	RORW $8, CX
+	SHRQ CX, AX
+	MULQ R13
+	RORW $8, CX 
+	SHRQ CX, DX		
+	MOVQ DX, BX		// BX = h
+	MOVQ R12, AX
+	MULQ DX			// d*h
+	SUBQ AX, R14	// l = x[i+1]-d*h
+	MOVQ R11, AX
+	MULQ R14		// l*m
+	ADDQ AX, R9
+	MOVQ R9, 0(R10)(SI*8)
 	ADDQ $1, SI
 	CMPQ SI, DI
 	JL L9
 X9a:
 	MOVQ BX, 0(R10)(SI*8)
-	MOVQ R13, AX
-	MULQ R12
-	MOVQ AX, c+56(FP)
 	RET
 X9b:
 	MOVQ $0, c+56(FP)

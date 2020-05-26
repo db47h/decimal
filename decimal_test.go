@@ -787,7 +787,7 @@ func TestDecimalSetRat(t *testing.T) {
 	}
 }
 
-func TestFloatSetInf(t *testing.T) {
+func TestDecimalSetInf(t *testing.T) {
 	var f Decimal
 	for _, test := range []struct {
 		signbit bool
@@ -1722,69 +1722,69 @@ func TestDecimalArithmeticSpecialValues(t *testing.T) {
 	}
 }
 
-// func TestFloatArithmeticOverflow(t *testing.T) {
-// 	for _, test := range []struct {
-// 		prec       uint
-// 		mode       RoundingMode
-// 		op         byte
-// 		x, y, want string
-// 		acc        Accuracy
-// 	}{
-// 		{4, ToNearestEven, '+', "0", "0", "0", Exact},                   // smoke test
-// 		{4, ToNearestEven, '+', "0x.8p+0", "0x.8p+0", "0x.8p+1", Exact}, // smoke test
+func TestDecimalArithmeticOverflow(t *testing.T) {
+	for _, test := range []struct {
+		prec       uint
+		mode       RoundingMode
+		op         byte
+		x, y, want string
+		acc        Accuracy
+	}{
+		{4, ToNearestEven, '+', "0", "0", "0", Exact},           // smoke test
+		{4, ToNearestEven, '+', "0.9", "0.9", "0.18e+1", Exact}, // smoke test
 
-// 		{4, ToNearestEven, '+', "0", "0x.8p2147483647", "0x.8p+2147483647", Exact},
-// 		{4, ToNearestEven, '+', "0x.8p2147483500", "0x.8p2147483647", "0x.8p+2147483647", Below}, // rounded to zero
-// 		{4, ToNearestEven, '+', "0x.8p2147483647", "0x.8p2147483647", "+Inf", Above},             // exponent overflow in +
-// 		{4, ToNearestEven, '+', "-0x.8p2147483647", "-0x.8p2147483647", "-Inf", Below},           // exponent overflow in +
-// 		{4, ToNearestEven, '-', "-0x.8p2147483647", "0x.8p2147483647", "-Inf", Below},            // exponent overflow in -
+		{4, ToNearestEven, '+', "0", "0.9e2147483647", "0.9e+2147483647", Exact},
+		{4, ToNearestEven, '+', "0.9e2147483500", "0.9e2147483647", "0.9e+2147483647", Below}, // rounded to zero
+		{4, ToNearestEven, '+', "0.9e2147483647", "0.9e2147483647", "+Inf", Above},            // exponent overflow in +
+		{4, ToNearestEven, '+', "-0.9e2147483647", "-0.9e2147483647", "-Inf", Below},          // exponent overflow in +
+		{4, ToNearestEven, '-', "-0.9e2147483647", "0.9e2147483647", "-Inf", Below},           // exponent overflow in -
 
-// 		{4, ToZero, '+', "0x.fp2147483647", "0x.8p2147483643", "0x.fp+2147483647", Below}, // rounded to zero
-// 		{4, ToNearestEven, '+', "0x.fp2147483647", "0x.8p2147483643", "+Inf", Above},      // exponent overflow in rounding
-// 		{4, AwayFromZero, '+', "0x.fp2147483647", "0x.8p2147483643", "+Inf", Above},       // exponent overflow in rounding
+		{4, ToZero, '+', "0.9999e2147483647", "0.9e2147483643", "0.9999e+2147483647", Below}, // rounded to zero
+		{4, ToNearestEven, '+', "0.9999e2147483647", "0.5e2147483643", "+Inf", Above},        // exponent overflow in rounding
+		{4, AwayFromZero, '+', "0.9999e2147483647", "0.5e2147483643", "+Inf", Above},         // exponent overflow in rounding
 
-// 		{4, AwayFromZero, '-', "-0x.fp2147483647", "0x.8p2147483644", "-Inf", Below},        // exponent overflow in rounding
-// 		{4, ToNearestEven, '-', "-0x.fp2147483647", "0x.8p2147483643", "-Inf", Below},       // exponent overflow in rounding
-// 		{4, ToZero, '-', "-0x.fp2147483647", "0x.8p2147483643", "-0x.fp+2147483647", Above}, // rounded to zero
+		{4, AwayFromZero, '-', "-0.9999e2147483647", "0.5e2147483644", "-Inf", Below},          // exponent overflow in rounding
+		{4, ToNearestEven, '-', "-0.9999e2147483647", "0.5e2147483643", "-Inf", Below},         // exponent overflow in rounding
+		{4, ToZero, '-', "-0.9999e2147483647", "0.5e2147483643", "-0.9999e+2147483647", Above}, // rounded to zero
 
-// 		{4, ToNearestEven, '+', "0", "0x.8p-2147483648", "0x.8p-2147483648", Exact},
-// 		{4, ToNearestEven, '+', "0x.8p-2147483648", "0x.8p-2147483648", "0x.8p-2147483647", Exact},
+		{4, ToNearestEven, '+', "0", "0.5e-2147483648", "0.5e-2147483648", Exact},
+		{4, ToNearestEven, '+', "0.5e-2147483648", "0.5e-2147483648", "0.1e-2147483647", Exact},
 
-// 		{4, ToNearestEven, '*', "1", "0x.8p2147483647", "0x.8p+2147483647", Exact},
-// 		{4, ToNearestEven, '*', "2", "0x.8p2147483647", "+Inf", Above},  // exponent overflow in *
-// 		{4, ToNearestEven, '*', "-2", "0x.8p2147483647", "-Inf", Below}, // exponent overflow in *
+		{4, ToNearestEven, '*', "1", "0.5e2147483647", "0.5e+2147483647", Exact},
+		{4, ToNearestEven, '*', "2", "0.5e2147483647", "+Inf", Above},  // exponent overflow in *
+		{4, ToNearestEven, '*', "-2", "0.5e2147483647", "-Inf", Below}, // exponent overflow in *
 
-// 		{4, ToNearestEven, '/', "0.5", "0x.8p2147483647", "0x.8p-2147483646", Exact},
-// 		{4, ToNearestEven, '/', "0x.8p+0", "0x.8p2147483647", "0x.8p-2147483646", Exact},
-// 		{4, ToNearestEven, '/', "0x.8p-1", "0x.8p2147483647", "0x.8p-2147483647", Exact},
-// 		{4, ToNearestEven, '/', "0x.8p-2", "0x.8p2147483647", "0x.8p-2147483648", Exact},
-// 		{4, ToNearestEven, '/', "0x.8p-3", "0x.8p2147483647", "0", Below}, // exponent underflow in /
-// 	} {
-// 		x := makeFloat(test.x)
-// 		y := makeFloat(test.y)
-// 		z := new(Float).SetPrec(test.prec).SetMode(test.mode)
-// 		switch test.op {
-// 		case '+':
-// 			z.Add(x, y)
-// 		case '-':
-// 			z.Sub(x, y)
-// 		case '*':
-// 			z.Mul(x, y)
-// 		case '/':
-// 			z.Quo(x, y)
-// 		default:
-// 			panic("unreachable")
-// 		}
-// 		if got := z.Text('p', 0); got != test.want || z.Acc() != test.acc {
-// 			t.Errorf(
-// 				"prec = %d (%s): %s %c %s = %s (%s); want %s (%s)",
-// 				test.prec, test.mode, x.Text('p', 0), test.op, y.Text('p', 0), got, z.Acc(), test.want, test.acc,
-// 			)
-// 		}
-// 	}
-// }
+		{4, ToNearestEven, '/', "0.5", "0.5e2147483647", "0.1e-2147483646", Exact},
+		{4, ToNearestEven, '/', "0.5e+0", "0.5e2147483647", "0.1e-2147483646", Exact},
+		{4, ToNearestEven, '/', "0.5e-1", "0.5e2147483647", "0.1e-2147483647", Exact},
+		{4, ToNearestEven, '/', "0.5e-2", "0.5e2147483647", "0.1e-2147483648", Exact},
+		{4, ToNearestEven, '/', "0.5e-3", "0.5e2147483647", "0", Below}, // exponent underflow in /
+	} {
+		x := makeDecimal(test.x)
+		y := makeDecimal(test.y)
+		z := new(Decimal).SetPrec(test.prec).SetMode(test.mode)
+		switch test.op {
+		case '+':
+			z.Add(x, y)
+		case '-':
+			z.Sub(x, y)
+		case '*':
+			z.Mul(x, y)
+		case '/':
+			z.Quo(x, y)
+		default:
+			panic("unreachable")
+		}
+		if got := z.Text('p', 0); got != test.want || z.Acc() != test.acc {
+			t.Errorf(
+				"prec = %d (%s): %s %c %s = %s (%s); want %s (%s)",
+				test.prec, test.mode, x.Text('p', 0), test.op, y.Text('p', 0), got, z.Acc(), test.want, test.acc,
+			)
+		}
+	}
+}
 
-// // TODO(gri) Add tests that check correctness in the presence of aliasing.
+// // TODO(db47h) Add tests that check correctness in the presence of aliasing.
 
 // // For rounding modes ToNegativeInf and ToPositiveInf, rounding is affected
 // // by the sign of the value to be rounded. Test that rounding happens after
@@ -1792,6 +1792,7 @@ func TestDecimalArithmeticSpecialValues(t *testing.T) {
 // // This test uses specific values that are known to fail if rounding is
 // // "factored" out before setting the result sign.
 // func TestFloatArithmeticRounding(t *testing.T) {
+// // TODO(db47h) Work out the proper test values for Decimals
 // 	for _, test := range []struct {
 // 		mode       RoundingMode
 // 		prec       uint
@@ -1838,40 +1839,40 @@ func TestDecimalArithmeticSpecialValues(t *testing.T) {
 // 	}
 // }
 
-// // TestFloatCmpSpecialValues tests that Cmp produces the correct results for
-// // combinations of zero (±0), finite (±1 and ±2.71828), and infinite (±Inf)
-// // operands.
-// func TestFloatCmpSpecialValues(t *testing.T) {
-// 	zero := 0.0
-// 	args := []float64{math.Inf(-1), -2.71828, -1, -zero, zero, 1, 2.71828, math.Inf(1)}
-// 	xx := new(Float)
-// 	yy := new(Float)
-// 	for i := 0; i < 4; i++ {
-// 		for _, x := range args {
-// 			xx.SetFloat64(x)
-// 			// check conversion is correct
-// 			// (no need to do this for y, since we see exactly the
-// 			// same values there)
-// 			if got, acc := xx.Float64(); got != x || acc != Exact {
-// 				t.Errorf("Float(%g) == %g (%s)", x, got, acc)
-// 			}
-// 			for _, y := range args {
-// 				yy.SetFloat64(y)
-// 				got := xx.Cmp(yy)
-// 				want := 0
-// 				switch {
-// 				case x < y:
-// 					want = -1
-// 				case x > y:
-// 					want = +1
-// 				}
-// 				if got != want {
-// 					t.Errorf("(%g).Cmp(%g) = %v; want %v", x, y, got, want)
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+// TestDecimalCmpSpecialValues tests that Cmp produces the correct results for
+// combinations of zero (±0), finite (±1 and ±2.71828), and infinite (±Inf)
+// operands.
+func TestDecimalCmpSpecialValues(t *testing.T) {
+	zero := 0.0
+	args := []float64{math.Inf(-1), -2.71828, -1, -zero, zero, 1, 2.71828, math.Inf(1)}
+	xx := new(Decimal)
+	yy := new(Decimal)
+	for i := 0; i < 4; i++ {
+		for _, x := range args {
+			xx.SetFloat64(x)
+			// check conversion is correct
+			// (no need to do this for y, since we see exactly the
+			// same values there)
+			if got, acc := xx.Float64(); got != x /* || acc != Exact */ {
+				t.Errorf("Float(%g) == %g (%s)", x, got, acc)
+			}
+			for _, y := range args {
+				yy.SetFloat64(y)
+				got := xx.Cmp(yy)
+				want := 0
+				switch {
+				case x < y:
+					want = -1
+				case x > y:
+					want = +1
+				}
+				if got != want {
+					t.Errorf("(%g).Cmp(%g) = %v; want %v", x, y, got, want)
+				}
+			}
+		}
+	}
+}
 
 func BenchmarkDecimalAdd(b *testing.B) {
 	x := new(Decimal)

@@ -43,7 +43,7 @@ var pow2digitsTab = [...]uint{
 	15, 15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20,
 }
 
-// decDigits returns n such that of x such that 10**(n-1) <= x < 10**n.
+// decDigits returns n such that 10**(n-1) <= x < 10**n.
 // In other words, n the number of digits required to represent n.
 // Returns 0 for x == 0.
 func decDigits(x uint) (n uint) {
@@ -157,7 +157,7 @@ var pow10DivTab64 = [...]magic{
 	{10000000000000000, 0xe69594bec44de15c, 1, 52},
 	{100000000000000000, 0xb877aa3236a4b44a, 1, 55},
 	{1000000000000000000, 0x9392ee8e921d5d08, 1, 58},
-	{10000000000000000000, 0xec1e4a7db69561a6, 1, 62},
+	// {10000000000000000000, 0xec1e4a7db69561a6, 1, 62},
 }
 
 var pow10DivTab32 = [...]magic{
@@ -169,7 +169,7 @@ var pow10DivTab32 = [...]magic{
 	{1000000, 0x8637bd06, 0, 19},
 	{10000000, 0xd6bf94d6, 0, 23},
 	{100000000, 0xabcc7712, 0, 26},
-	{1000000000, 0x89705f42, 1, 28},
+	// {1000000000, 0x89705f42, 1, 28},
 }
 
 type magic struct {

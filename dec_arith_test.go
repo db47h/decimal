@@ -12,7 +12,7 @@ import (
 
 func TestDecDigits(t *testing.T) {
 	for i := 0; i < 10000; i++ {
-		n := uint(rnd.Uint64())
+		n := uint(rnd10W())
 		d := uint(0)
 		for m := n; m != 0; m /= 10 {
 			d++

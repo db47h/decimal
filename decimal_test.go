@@ -622,9 +622,9 @@ func TestDecimalSetUint64(t *testing.T) {
 	for prec := uint(1); prec <= mp; prec++ {
 		f := new(Decimal).SetPrec(prec).SetMode(ToZero).SetUint64(x)
 		got := f.uint64()
-		want := x - x%uint64(pow10(mp-prec)) // cut off (round to zero) low prec digits
+		want := x - x%pow10tab[mp-prec] // cut off (round to zero) low prec digits
 		if got != want {
-			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+			t.Errorf("got %d (%s, prec %d); want %d", got, f.Text('p', 0), prec, want)
 		}
 	}
 }
@@ -658,9 +658,9 @@ func TestDecimalSetInt64(t *testing.T) {
 	for prec := uint(1); prec <= mp; prec++ {
 		f := new(Decimal).SetPrec(prec).SetMode(ToZero).SetInt64(x)
 		got := f.int64()
-		want := x - x%int64(pow10(mp-prec)) // cut off (round to zero) low prec digits
+		want := x - x%int64(pow10tab[mp-prec]) // cut off (round to zero) low prec digits
 		if got != want {
-			t.Errorf("got %#x (%s); want %#x", got, f.Text('p', 0), want)
+			t.Errorf("got %d (%s, prec %d); want %d", got, f.Text('p', 0), prec, want)
 		}
 	}
 }

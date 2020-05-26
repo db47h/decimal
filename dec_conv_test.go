@@ -24,8 +24,8 @@ var decStrTests = []struct {
 	{dec{0xc5}, 2, "11000101"},
 	{dec{03271}, 8, "3271"},
 	{dec{10}, 10, "10"},
-	{dec{1234567890}, 10, "1234567890"},
-	{dec{0xdeadbeef}, 16, "deadbeef"},
+	{dec{987654321}, 10, "987654321"},
+	{dec{0xbadcafe}, 16, "badcafe"},
 	{dec{0x229be7}, 17, "1a2b3c"},
 	{dec{0x309663e6}, 32, "o9cov6"},
 	{dec{0x309663e6}, 62, "TakXI"},
@@ -146,15 +146,15 @@ var decScanTests = []struct {
 	{"0O17", 0, false, dec{017}, 8, 2, nil, 0},
 	{"03271", 0, false, dec{03271}, 8, 4, nil, 0},
 	{"10ab", 0, false, dec{10}, 10, 2, nil, 'a'},
-	{"1234567890", 0, false, dec{1234567890}, 10, 10, nil, 0},
+	{"987654321", 0, false, dec{987654321}, 10, 9, nil, 0},
 	{"A", 36, false, dec{10}, 36, 1, nil, 0},
 	{"A", 37, false, dec{36}, 37, 1, nil, 0},
 	{"xyz", 36, false, dec{(33*36+34)*36 + 35}, 36, 3, nil, 0},
 	{"XYZ?", 36, false, dec{(33*36+34)*36 + 35}, 36, 3, nil, '?'},
 	{"XYZ?", 62, false, dec{(59*62+60)*62 + 61}, 62, 3, nil, '?'},
 	{"0x", 16, false, nil, 16, 1, nil, 'x'},
-	{"0xdeadbeef", 0, false, dec{0xdeadbeef}, 16, 8, nil, 0},
-	{"0XDEADBEEF", 0, false, dec{0xdeadbeef}, 16, 8, nil, 0},
+	{"0xbadcafe", 0, false, dec{0xbadcafe}, 16, 7, nil, 0},
+	{"0XBADCAFE", 0, false, dec{0xbadcafe}, 16, 7, nil, 0},
 
 	// valid, with decimal point
 	{"0.", 0, false, nil, 10, 1, nil, '.'},
@@ -170,7 +170,7 @@ var decScanTests = []struct {
 	{"0B0.12", 0, true, dec{1}, 2, -1, nil, '2'},
 	{"0o0.7", 0, true, dec{7}, 8, -1, nil, 0},
 	{"0O0.78", 0, true, dec{7}, 8, -1, nil, '8'},
-	{"0xdead.beef", 0, true, dec{0xdeadbeef}, 16, -4, nil, 0},
+	{"0xbad.beef", 0, true, dec{0xbadbeef}, 16, -4, nil, 0},
 
 	// valid, with separators
 	{"1_000", 0, false, dec{1000}, 10, 4, nil, 0},

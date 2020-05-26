@@ -29,7 +29,12 @@ var pow10tab = [...]uint64{
 	10000000000000000, 100000000000000000, 1000000000000000000, 10000000000000000000,
 }
 
-func pow10(n uint) Word { return Word(pow10tab[n]) }
+func pow10(n uint) Word {
+	if debugDecimal && _W == 32 && n > 9 {
+		panic("pow10: overflow")
+	}
+	return Word(pow10tab[n])
+}
 
 var pow2digitsTab = [...]uint{
 	1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5,
@@ -43,32 +48,29 @@ var pow2digitsTab = [...]uint{
 // Returns 0 for x == 0.
 func decDigits(x uint) (n uint) {
 	if bits.UintSize == 32 {
-		return decDigits32(x)
+		return decDigits32(uint32(x))
 	}
 	return decDigits64(uint64(x))
 }
 
 func decDigits64(x uint64) (n uint) {
 	n = pow2digitsTab[bits.Len64(x)]
-	if x < uint64(pow10(n-1)) {
+	if x < pow10tab[n-1] {
 		n--
 	}
 	return n
 }
 
-func decDigits32(x uint) (n uint) {
-	n = pow2digitsTab[bits.Len(x)]
-	if x < uint(pow10(n-1)) {
+func decDigits32(x uint32) (n uint) {
+	n = pow2digitsTab[bits.Len32(x)]
+	if x < uint32(pow10tab[n-1]) {
 		n--
 	}
 	return n
 }
 
 func nlz10(x Word) uint {
-	if bits.UintSize == 32 {
-		return _DW - decDigits32(uint(x))
-	}
-	return _DW - decDigits64(uint64(x))
+	return _DW - decDigits(uint(x))
 }
 
 func trailingZeroDigits(n uint) uint {

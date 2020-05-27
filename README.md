@@ -1,6 +1,9 @@
 # decimal
 
 [![godocb]][godoc]
+[![travisb]][travis]
+[![coverb]][cover]
+[![goreportb]][goreport]
 
 Package decimal implements arbitrary-precision decimal floating-point arithmetic
 for Go.
@@ -192,6 +195,12 @@ Any helpful insights are welcome.
 
 [godoc]: https://pkg.go.dev/github.com/db47h/decimal?tab=doc
 [godocb]: https://img.shields.io/badge/go.dev-reference-blue
+[goreport]: https://goreportcard.com/report/github.com/db47h/decimal
+[goreportb]: https://goreportcard.com/badge/github.com/db47h/decimal
+[travis]: https://travis-ci.org/db47h/decimal
+[travisb]: https://travis-ci.org/db47h/decimal.svg?branch=master
+[cover]: https://coveralls.io/github/db47h/decimal?branch=master
+[coverb]: https://coveralls.io/repos/github/db47h/decimal/badge.svg?branch=master
 [eldecimal]: https://github.com/ericlagergren/decimal
 [apd]: github.com/cockroachdb/apd
 [spdec]: github.com/shopspring/decimal

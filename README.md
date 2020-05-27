@@ -121,9 +121,9 @@ Word, regardless of precision.
 Rounding happens after every operation in decimal and Eric's decimal in GDA mode
 (not in Go mode, which explains its speed). Rounding requires a decimal shift
 right, which translates to a division by 10**shift. Again for small shifts,
-binary representations are faster, but as precision gets higher. On decimal
-implementations, this translates to a memcpy and a divmod of the least
-significant Word.
+binary representations are faster, but degrades even faster as precision gets
+higher. On decimal implementations, this operation is quite fast since it
+translates to a memcpy and a divmod of the least significant Word.
 
 This explains why decimal's performace degrades slower than Eric's decimal-GDA
 as precision increases, and why Eric's decimal in Go mode is so fast (no
@@ -167,8 +167,9 @@ However, feel free do do this:
 
     d.Mul(d, d) // d = d*d
 
-The code will properly detect that the receiver is also one of the arguments (possibly both),
-and allocate temporary storage space if (and only if) necessary. Should this kind of construct fail, please file an issue.
+The code will properly detect that the receiver is also one of the arguments
+(possibly both), and allocate temporary storage space if (and only if)
+necessary. Should this kind of construct fail, please file an issue.
 
 ## License
 
@@ -176,6 +177,18 @@ Simplified BSD license. See the [LICENSE] file.
 
 The decimal package reuses a lot of code from the Go standard library, governed
 by a 3-Clause BSD license. See the [LICENSE-go] file.
+
+I'm aware that software using this package might have to include both licenses,
+which might be a hassle; tracking licenses from dependencies is hard enough as
+it is. I'd love to have a single license and hand over copyright to "The Go
+authors", but the clause restricting use of the names of contributors for
+endorsement of a derived work in the 3-Clause BSD license that Go uses is
+problematic. i.e. I can't just use it as-is, mentioning Google Inc., as that
+would be an infringement in itself (well, that's the way I see it, but IANAL).
+On the other hand, any piece of software written in Go should include the Go
+license anyway...
+
+Any helpful insights are welcome.
 
 [godoc]: https://pkg.go.dev/github.com/db47h/decimal?tab=doc
 [godocb]: https://img.shields.io/badge/go.dev-reference-blue

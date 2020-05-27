@@ -51,22 +51,22 @@ and an exactly rounded `Sqrt`. Other functions like Log will be implemented in a
 future "math" sub-package. All results are rounded to the desired precision (no
 manual rounding).
 
-NaN values are not supported (like `big.Float`). In IEEE-754 terminology, NaNs
-are `signaling NaNs`, that is when a NaN is generated as a result of an
-operation, it causes a panic. Applications that need to handle NaNs can use Go's
-built-in panic/recover machanism to handle these efficiently: NaNs cause a panic
-with an ErrNaN whihc can be tested to distinguish NaNs from other causes of
-panic.
+NaN values are not directly supported (like in `big.Float`). They can be
+considered as "signaling NaNs" in IEEE-754 terminology, that is when a NaN is
+generated as a result of an operation, it causes a panic. Applications that need
+to handle NaNs gracefully can use Go's built-in panic/recover machanism to
+handle these efficiently: NaNs cause a panic with an ErrNaN which can be tested
+to distinguish NaNs from other causes of panic.
 
 Mantissae are always normalized, as a result, Decimals have a single possible
 representation:
 
     0.1 <= mantissa < 1; d = mantissa × 10**exponent
 
-so there is no Quantize operation.
+so there is no notion of scale and no Quantize operation.
 
-There is no notion of "context". Context have not been implemented in this
-package simply to keep the API in-line with math/big. Contexts are however so
+There is no notion of "context" either. Contexts have not been implemented in
+this package simply to keep the API in-line with math/big. They are however so
 useful that they will be provided by a future sub-package.
 
 ## TODO's and upcoming features
@@ -111,7 +111,7 @@ Note that Eric's decimal uses a separate logic for decimals < 1e19 (mantissa
 stored in a single uint64), which explains its impressive perfomance for low
 precisions.
 
-In additions, and subtractions the operands mantissae need to be aligned
+In additions and subtractions the operands' mantissae need to be aligned
 (shifted), this results in an additional multiplication by 10**shift. In
 implementations that use a binary representation of the matissa, this is faster
 for shifts < 19, but performance degrades as shifts get higher. With a decimal
@@ -172,13 +172,15 @@ and allocate temporary storage space if (and only if) necessary. Should this kin
 
 ## License
 
-Simplified BSD license. See the LICENSE file at the root of the package tree.
+Simplified BSD license. See the [LICENSE] file.
 
 The decimal package reuses a lot of code from the Go standard library, governed
-by a 3-Clause BSD license. See the LICENSE-go file.
+by a 3-Clause BSD license. See the [LICENSE-go] file.
 
 [godoc]: https://pkg.go.dev/github.com/db47h/decimal?tab=doc
 [godocb]: https://img.shields.io/badge/go.dev-reference-blue
 [eldecimal]: https://github.com/ericlagergren/decimal
 [apd]: github.com/cockroachdb/apd
 [spdec]: github.com/shopspring/decimal
+[LICENSE]: https://github.com/db47h/decimal/blob/master/LICENSE
+[LICENSE-go]: https://github.com/db47h/decimal/blob/master/LICENSE-go

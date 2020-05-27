@@ -1028,8 +1028,11 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 		return z
 	}
 
-	// TODO(db47h): the conversion is somewhat contrieved,
-	// but we don't have access to x's mantissa.
+	// TODO(db47h): the conversion is somewhat contrieved, but we don't have
+	// access to x's mantissa. The conversion algorithm is also naive. Cmparing
+	// string -> big.Float -> Decimal -> string will very likely fail since the
+	// Decimal is not rounded to the shortest possible representation of the
+	// input float.
 	f := new(big.Float).Copy(x)
 	// get int value of mantissa
 	exp2 := int64(f.MantExp(f))
@@ -1081,10 +1084,16 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 		return z
 	}
 	// normalized x != 0
+
+	// TODO(db47h): The conversion algorithm is naive. Cmparing string ->
+	// float64 -> Decimal -> string will very likely fail since the Decimal is
+	// not rounded to the shortest possible representation of the input float
+	// when z.prec == 0.
+
 	z.form = finite
 	fmant, exp2 := math.Frexp(x) // get normalized mantissa
-	exp2 -= 64
-	z.mant = z.mant.setUint64(1<<63 | math.Float64bits(fmant)<<11)
+	exp2 -= 53
+	z.mant = z.mant.setUint64(1<<52 | (math.Float64bits(fmant) & (1<<52 - 1)))
 	z.exp = int32(len(z.mant))*_DW - int32(dnorm(z.mant))
 	if exp2 != 0 {
 		// multiply / divide by 2**exp with increased precision

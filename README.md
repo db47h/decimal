@@ -39,7 +39,7 @@ outside this package.
 
 Unlike big.Float, the mantissa of a Decimal is stored in a little-endian Word
 slice as "declets" of 9 or 19 decimal digits per 32 or 64 bits Word. All
-arithmetic operations are performed directly in base 10**9 or 10**19 without
+arithmetic operations are performed directly in base 10\*\*9 or 10\*\*19 without
 conversion to/from binary (see Performance below for a more in-depth discussion
 of this choice).
 
@@ -82,6 +82,10 @@ useful that they will be provided by a future sub-package.
 - A math sub-package that will provide at least the functions required by
   IEEE-754
 - A context sub-package
+- Some performance improvement ideas:
+    - try a non-normalized mantissa.
+    - in add, there are some cycles to shave off by combining the shift and add
+      for simple cases.
 
 The decimal API is frozen, that is, any additional features will be added in
 sub-packages.
@@ -96,7 +100,7 @@ out, so it's not an option either.
 
 There are other full-featured arbitrary-precision decimal-floating point
 libraries for Go out there, like [Eric Lagergren's decimal][eldecimal],
-[CockroachDB's apd][apd], or [Spring's decimal][spdec].
+[CockroachDB's apd][apd], or [Shopspring's decimal][Shopspring].
 
 For users only interested in performance here are the benchmark results of this
 package versus the others using Eric's Pi test (times are in ns/op sorted from
@@ -107,7 +111,7 @@ fastest to slowest at 38 digits of precision):
 | Eric's decimal (Go) | 6415 | 30254 | 65171 | 194263 | 1731528 | 89841923 |
 | decimal | 12887 | 42720 | 100878 | 348865 | 4212811 | 342349031| 
 | Eric's decimal (GDA) | 7124 | 39357 | 107720 | 392453 | 5421146 | 1175936547 |
-| Spring's decimal | 39528 | 96261 | 204017 | 561321 | 3402562 | 97370022 |
+| Shopspring's decimal | 39528 | 96261 | 204017 | 561321 | 3402562 | 97370022 |
 | apd | 70833 | 301098 | 1262021 | 9859180 | 716558666 | ??? |
 
 Note that Eric's decimal uses a separate logic for decimals < 1e19 (mantissa
@@ -115,7 +119,7 @@ stored in a single uint64), which explains its impressive perfomance for low
 precisions.
 
 In additions and subtractions the operands' mantissae need to be aligned
-(shifted), this results in an additional multiplication by 10**shift. In
+(shifted), this results in an additional multiplication by 10\*\*shift. In
 implementations that use a binary representation of the matissa, this is faster
 for shifts < 19, but performance degrades as shifts get higher. With a decimal
 representation, this requires a multiplication as well but always by a single
@@ -123,7 +127,7 @@ Word, regardless of precision.
 
 Rounding happens after every operation in decimal and Eric's decimal in GDA mode
 (not in Go mode, which explains its speed). Rounding requires a decimal shift
-right, which translates to a division by 10**shift. Again for small shifts,
+right, which translates to a division by 10\*\*shift. Again for small shifts,
 binary representations are faster, but degrades even faster as precision gets
 higher. On decimal implementations, this operation is quite fast since it
 translates to a memcpy and a divmod of the least significant Word.
@@ -135,7 +139,7 @@ alignment).
 
 ## Caveats
 
-The Float <-> Decimal conversion code needs some love
+The Float <-> Decimal conversion code needs some love.
 
 The math/big API is designed to keep memory allocations to a minimum, but some
 people find it cumbersome. Indeed it requires some practice to get used to it, 
@@ -202,7 +206,7 @@ Any helpful insights are welcome.
 [cover]: https://coveralls.io/github/db47h/decimal?branch=master
 [coverb]: https://coveralls.io/repos/github/db47h/decimal/badge.svg?branch=master
 [eldecimal]: https://github.com/ericlagergren/decimal
-[apd]: github.com/cockroachdb/apd
-[spdec]: github.com/shopspring/decimal
+[apd]: https://github.com/cockroachdb/apd
+[Shopspring]: https://github.com/shopspring/decimal
 [LICENSE]: https://github.com/db47h/decimal/blob/master/LICENSE
 [LICENSE-go]: https://github.com/db47h/decimal/blob/master/LICENSE-go

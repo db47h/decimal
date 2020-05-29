@@ -18,7 +18,7 @@ var (
 	three   = NewDecimal(3, 0)
 )
 
-// Sqrt sets z to the rounded square root of x, and returns it.
+// Sqrt sets z to the rounded square root of x, and returns z.
 //
 // If z's precision is 0, it is changed to x's precision before the
 // operation. Rounding is performed according to z's precision and

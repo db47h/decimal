@@ -19,13 +19,19 @@
 // set z to the result of z.Op(args), rounded using the c's precision and
 // rounding mode and return z.
 //
-// A Context catches NaN errors: if an operation generates a NaN, the operation
-// will silently succeed with an undefined result. Further operations with the
-// context will be no-ops (they simply return the receiver z) until
-// (*Context).Err is called to check for errors.
+// Operations on a Context are panic free: if an operation generates a NaN, the
+// operation will silently succeed with an undefined result (they simply return
+// the receiver z, but its value is undefined). Further operations with the
+// context will be no-ops until (*Context).Err is called to check for errors.
 //
 // Although it does not exactly provide IEEE-754 NaNs, it provides a form of
 // support for quiet NaNs.
+//
+// The idiomatic use is to think of operations between calls to (*Context).Err
+// as a transaction. Operations are done in batches uintil a result is to be
+// output (or re-used in the next iteration of a loop). Calling (*Context).Err
+// at this point determines if the last batch was successful and the result
+// usable. This also readies the Context for the next transaction.
 package context
 
 import (

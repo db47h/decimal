@@ -247,9 +247,9 @@ func (z *Decimal) Parse(s string, base int) (f *Decimal, b int, err error) {
 	return
 }
 
-// ParseDecimal is like f.Parse(s, base) with f set to the given precision
+// ParseDecimal is like d.Parse(s, base) with d set to the given precision
 // and rounding mode.
-func ParseDecimal(s string, base int, prec uint, mode RoundingMode) (f *Decimal, b int, err error) {
+func ParseDecimal(s string, base int, prec uint, mode RoundingMode) (d *Decimal, b int, err error) {
 	return new(Decimal).SetPrec(prec).SetMode(mode).Parse(s, base)
 }
 

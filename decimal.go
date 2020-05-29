@@ -829,7 +829,7 @@ func (z *Decimal) Neg(x *Decimal) *Decimal {
 	return z
 }
 
-// Prec returns the mantissa precision of x in bits.
+// Prec returns the mantissa precision of x in decimal digits.
 // The result may be 0 for |x| == 0 and |x| == Inf.
 func (x *Decimal) Prec() uint {
 	return uint(x.prec)

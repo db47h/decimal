@@ -11,27 +11,30 @@
 // create a new decimal.Decimal set to the value of x, and rounded using c's
 // precision and rounding mode.
 //
-// Operators that set a receiver z to function of other decimal arguments like:
+// Operators that set a receiver z to a function of other decimal arguments
+// like:
 //
 //    func (c *Context) UnaryOp(z, x *decimal.Decimal) *decimal.Decimal
 //    func (c *Context) BinaryOp(z, x, y *decimal.Decimal) *decimal.Decimal
 //
 // set z to the result of z.Op(args), rounded using the c's precision and
-// rounding mode and return z.
+// rounding mode and return z. Caveat: rounding occurs *before* doing the
+// operation, as a result, if z is also one of the arguments, this may lead to
+// incorrect results (1.349 -> 1.35 -> 1.4 instead of 1.3).
 //
 // Operations on a Context are panic free: if an operation generates a NaN, the
 // operation will silently succeed with an undefined result (they simply return
 // the receiver z, but its value is undefined). Further operations with the
-// context will be no-ops until (*Context).Err is called to check for errors.
+// context will be no-ops until (Context).Err is called to check for errors.
 //
 // Although it does not exactly provide IEEE-754 NaNs, it provides a form of
 // support for quiet NaNs.
 //
-// The idiomatic use is to think of operations between calls to (*Context).Err
-// as a transaction. Operations are done in batches uintil a result is to be
-// output (or re-used in the next iteration of a loop). Calling (*Context).Err
-// at this point determines if the last batch was successful and the result
-// usable. This also readies the Context for the next transaction.
+// The idiomatic use is to think of operations between calls to (Context).Err as
+// a transaction. Operations are done in batches uintil a result is to be output
+// (or re-used in the next iteration of a loop). Calling (Context).Err at this
+// point determines if the last batch was successful and the result usable. This
+// also readies the Context for the next transaction.
 package context
 
 import (
@@ -53,8 +56,11 @@ type Context struct {
 
 // New creates a new context with the given precision and rounding mode. If prec
 // is 0, it will be set to decimal.DefaultRoundingMode.
-func New(prec uint, mode decimal.RoundingMode) *Context {
-	return new(Context).SetMode(mode).SetPrec(prec)
+func New(prec uint, mode decimal.RoundingMode) Context {
+	return Context{
+		prec: setPrec(prec),
+		mode: mode,
+	}
 }
 
 // Mode returns the rounding mode of c.
@@ -74,11 +80,7 @@ func (c *Context) SetMode(mode decimal.RoundingMode) *Context {
 	return c
 }
 
-// SetPrec sets c's precision to prec and returns c.
-//
-// If prec > MaxPrec, it is set to MaxPrec. If prec == 0, it is set to
-// decimal.DefaultDecimalPrec.
-func (c *Context) SetPrec(prec uint) *Context {
+func setPrec(prec uint) uint32 {
 	// special case
 	if prec == 0 {
 		prec = decimal.DefaultDecimalPrec
@@ -87,7 +89,15 @@ func (c *Context) SetPrec(prec uint) *Context {
 	if prec > decimal.MaxPrec {
 		prec = decimal.MaxPrec
 	}
-	c.prec = uint32(prec)
+	return uint32(prec)
+}
+
+// SetPrec sets c's precision to prec and returns c.
+//
+// If prec > MaxPrec, it is set to MaxPrec. If prec == 0, it is set to
+// decimal.DefaultDecimalPrec.
+func (c *Context) SetPrec(prec uint) *Context {
+	c.prec = setPrec(prec)
 	return c
 }
 
@@ -167,11 +177,11 @@ func (c *Context) Round(z, x *decimal.Decimal) *decimal.Decimal {
 	return c.apply(z.Copy(x))
 }
 
-// apply applies c's precision and rounding mode to z and returns z.
+// apply applies c's precision and rounding mode to z.
 func (c *Context) apply(z *decimal.Decimal) *decimal.Decimal {
 	z.SetMode(c.mode)
 	if z.Prec() != uint(c.prec) {
-		z.SetPrec(0).SetPrec(uint(c.prec))
+		z.SetPrec(uint(c.prec))
 	}
 	return z
 }

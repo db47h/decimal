@@ -2,7 +2,6 @@ package context
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"testing"
 
@@ -117,27 +116,3 @@ var pi = "3." +
 	"34189948544473456738316249934191318148092777710386387734317720754565453220777092120190516609628049092636019759" +
 	"88281613323166636528619326686336062735676303544776280350450777235547105859548702790814356240145171806246436267" +
 	"94561275318134078330336254232783944975382437205835311477119926063813346776879695970309833913077109870408591337"
-
-func ExampleContext_Err() {
-	c := New(0, decimal.ToNearestEven)
-
-	x := c.NewInt64(-1)
-	z := c.Sqrt(c.New(), x) // silently fails
-
-	zero := c.New()
-	// no-op, c.Err will still report "square root of negative operand" but the
-	// value of z is undefined.
-	c.Quo(z, zero, zero)
-
-	// calling c.Err clears the error state.
-	fmt.Println(c.Err())
-
-	x.SetInt64(4)
-	c.Sqrt(z, x)
-	fmt.Printf("√(%g) = %g", x, z)
-
-	//
-	// Output:
-	// square root of negative operand
-	// √(4) = 2
-}

@@ -61,7 +61,7 @@ func (z *IDec) SetString(s string) *IDec {
 		z.exp = int32(i - len(s) + 1)
 		s = s[:i] + s[i+1:]
 	}
-	_, ok := z.mant.SetString(s, 0)
+	_, ok := z.mant.SetString(s, 10)
 	if !ok {
 		panic("(*IDec).SetString: (*big.Int).SetString failed")
 	}

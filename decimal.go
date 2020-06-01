@@ -1147,12 +1147,16 @@ func (z *Decimal) SetInt(x *big.Int) *Decimal {
 	// TODO(db47h) truncating x could be more efficient if z.prec > 0
 	// but small compared to the size of x.
 	z.mant = z.mant.make(int((prec + _DW - 1) / _DW)).setNat(x.Bits())
-	exp := dnorm(z.mant)
 	if z.prec == 0 {
-		// adjust precision
-		z.prec = uint32(max(len(z.mant)*_DW-int(z.mant.trailingZeroDigits()), DefaultDecimalPrec))
+		// adjust precision. z.mant is not notmalized yet. use nlz() and accept
+		// trailing zeros as part of the required precision
+		digits := int64(len(z.mant))*_DW - int64(nlz10(z.mant[len(z.mant)-1]))
+		if digits > MaxPrec {
+			digits = MaxPrec
+		}
+		z.prec = umax32(uint32(digits), DefaultDecimalPrec)
 	}
-	z.setExpAndRound(int64(len(z.mant))*_DW-exp, 0)
+	z.setExpAndRound(int64(len(z.mant))*_DW-dnorm(z.mant), 0)
 	return z
 }
 
@@ -1584,9 +1588,9 @@ func dnorm(m dec) int64 {
 	if debugDecimal && (len(m) == 0 || m[len(m)-1] == 0) {
 		panic("msw of mantissa is 0")
 	}
-	s := _DW - decDigits(uint(m[len(m)-1]))
-	// partial shift
+	s := nlz10(m[len(m)-1])
 	if s > 0 {
+		// partial shift
 		c := shl10VU(m, m, s)
 		if debugDecimal && c != 0 {
 			panic("nlz or shlVU incorrect")

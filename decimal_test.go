@@ -721,7 +721,7 @@ func TestDecimalSetInt(t *testing.T) {
 		f.SetInt(&x)
 
 		// check precision
-		n := len(strings.TrimRight(want, "0"))
+		n := len(want)
 		if n < DefaultDecimalPrec {
 			n = DefaultDecimalPrec
 		}
@@ -747,7 +747,7 @@ func TestDecimalSetRat(t *testing.T) {
 		{"-1", DefaultDecimalPrec},
 		{"1234567890", DefaultDecimalPrec},
 		{"123456789012345678901234567890", DefaultDecimalPrec},
-		{"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", 89},
+		{"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", 90},
 		{"1.2", DefaultDecimalPrec},
 		{"3.14159265", DefaultDecimalPrec},
 		// TODO(db47h) expand

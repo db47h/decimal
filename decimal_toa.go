@@ -346,7 +346,7 @@ func (x *Decimal) fmtP(buf []byte) []byte {
 	mant, exp := x.toa(10)
 	buf = append(buf, bytes.TrimRight(mant, "0")...)
 	buf = append(buf, 'e')
-	if x.exp >= 0 {
+	if exp >= 0 {
 		buf = append(buf, '+')
 	}
 	return strconv.AppendInt(buf, int64(exp), 10)

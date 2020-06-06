@@ -3,6 +3,7 @@ package context
 import (
 	"errors"
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/db47h/decimal"
@@ -28,39 +29,56 @@ var (
 	thirtyTwo = new(decimal.Decimal).SetPrec(9).SetUint64(32)
 )
 
-func computePi(prec uint) *decimal.Decimal {
+func computePi(z *decimal.Decimal) *decimal.Decimal {
 	var (
+		prec  = z.Prec()
 		c     = New(uint(math.Ceil(float64(prec)*1.1))+1, decimal.ToNearestEven)
-		lastS = c.New()
+		lastZ = c.New()
 		t     = c.NewUint64(3)
-		s     = c.NewUint64(3)
 		n     = c.NewUint64(1)
 		na    = c.New()
 		d     = c.New()
 		da    = c.NewUint64(24)
 		tmp   = c.New()
 	)
-	for s.Cmp(lastS) != 0 {
-		lastS.Copy(s)
+	m := z.Mode()
+	z.SetMode(c.Mode()).SetPrec(c.Prec()).SetUint64(3)
+
+	for z.Cmp(lastZ) != 0 {
+		lastZ.Copy(z)
 		c.Add(n, n, na)
 		c.Add(na, na, eight)
 		c.Add(d, d, da)
 		c.Add(da, da, thirtyTwo)
 		c.Mul(tmp, t, n)
 		c.Quo(t, tmp, d)
-		c.Add(s, s, t)
+		c.Add(z, z, t)
 	}
-	return s.SetMode(decimal.ToNearestEven).SetPrec(prec)
+	return z.SetPrec(prec).SetMode(m)
 }
 
 func TestDecimalPi(t *testing.T) {
+	var zero decimal.Decimal
 	pi, _ := new(decimal.Decimal).SetPrec(uint(len(pi) - 1)).SetString(pi)
+	var got decimal.Decimal
 	for p := uint(1); p <= 100; p++ {
 		want := new(decimal.Decimal).SetPrec(p).Set(pi)
-		got := computePi(p)
+		got.Set(&zero).SetPrec(p)
+		computePi(&got)
 		if got.Cmp(want) != 0 {
 			t.Errorf("prec %d:\n\tgot  %v\n\twant %v", p, got, want)
 		}
+	}
+}
+
+func BenchmarkPi(b *testing.B) {
+	for _, prec := range []uint{19, 34, 78, 150} {
+		b.Run(strconv.Itoa(int(prec)), func(b *testing.B) {
+			z := new(decimal.Decimal).SetPrec(prec)
+			for i := 0; i < b.N; i++ {
+				computePi(z)
+			}
+		})
 	}
 }
 

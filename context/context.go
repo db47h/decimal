@@ -166,9 +166,9 @@ func (c *Context) Err() (err error) {
 	return
 }
 
-// Round sets z's to the value of x and returns z rounded using c's precision
+// Set sets z's to the value of x and returns z rounded using c's precision
 // and rounding mode.
-func (c *Context) Round(z, x *decimal.Decimal) *decimal.Decimal {
+func (c *Context) Set(z, x *decimal.Decimal) *decimal.Decimal {
 	if handleNaNs {
 		if c.err != nil {
 			return z

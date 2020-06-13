@@ -1043,7 +1043,7 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 	exp2 -= int64(fprec)
 	if exp2 != 0 {
 		// multiply / divide by 2**exp with increased precision
-		z.prec += 1
+		z.prec++
 		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
 			if exp2 < MinExp {
@@ -1056,7 +1056,7 @@ func (z *Decimal) SetFloat(x *big.Float) *Decimal {
 		} else {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
-		z.prec -= 1
+		z.prec--
 	}
 	z.round(0)
 	return z
@@ -1097,14 +1097,14 @@ func (z *Decimal) SetFloat64(x float64) *Decimal {
 	z.exp = int32(len(z.mant))*_DW - int32(dnorm(z.mant))
 	if exp2 != 0 {
 		// multiply / divide by 2**exp with increased precision
-		z.prec += 1
+		z.prec++
 		t := new(Decimal).SetPrec(uint(z.prec))
 		if exp2 < 0 {
 			z = z.Quo(z, t.pow2(uint64(-exp2)))
 		} else {
 			z = z.Mul(z, t.pow2(uint64(exp2)))
 		}
-		z.prec -= 1
+		z.prec--
 	}
 	z.round(0)
 	return z
@@ -1617,8 +1617,10 @@ func (z *Decimal) umul(x, y *Decimal) {
 }
 
 const (
-	DigitsPerWord = _DW // number of decimal digits per 32 or 64 bits mantissa Word
-	DecimalBase   = _DB // decimal base
+	// DigitsPerWord is the number of decimal digits per 32 or 64 bits mantissa Word.
+	DigitsPerWord = _DW
+	// DecimalBase is the decimal base for a 32 or 64 bits mantissa Word.
+	DecimalBase = _DB
 )
 
 // BitsExp provides raw (unchecked but fast) access to x by returning its

@@ -31,7 +31,7 @@ import (
 //
 // Note that the 'b' and 'p' formats differ from big.Float: an hexadecimal
 // representation does not make sense for decimals. These formats use a full
-// decimal representaion instead.
+// decimal representation instead.
 //
 // If format is a different character, Text returns a "%" followed by the
 // unrecognized format character.
@@ -179,7 +179,7 @@ func (x *Decimal) bufSizeForFmt(fmt byte, prec int) int {
 			sz += prec + 1
 		}
 	case 'f':
-		sz += 1
+		sz++
 		if prec < 0 {
 			sz += digits
 			if exp < 0 || exp > digits {
@@ -438,7 +438,7 @@ func (x *Decimal) Format(s fmt.State, format rune) {
 }
 
 // toa returns x.mant.utoa(base) and x.exp with least significant zero Words removed
-// this function retuns nil, 0 for non-finite numbers.
+// this function returns nil, 0 for non-finite numbers.
 func (x *Decimal) toa(base int) ([]byte, int) {
 	if x.form == finite {
 		m := x.mant

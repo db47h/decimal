@@ -143,7 +143,7 @@ func (c *Context) NewRat(x *big.Rat) *decimal.Decimal {
 	return c.New().SetRat(x)
 }
 
-// NewFromString returns a new Decimal with the value of s and a boolean
+// NewString returns a new Decimal with the value of s and a boolean
 // indicating success. s must be a floating-point number of the same format as
 // accepted by (*decimal.Decimal).Parse, with base argument 0. The entire string
 // (not just a prefix) must be valid for success. If the operation failed, the

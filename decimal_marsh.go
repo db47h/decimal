@@ -106,10 +106,9 @@ func (x *Decimal) MarshalText() (text []byte, err error) {
 	return x.Append(buf, 'g', -1), nil
 }
 
-// UnmarshalText implements the encoding.TextUnmarshaler interface.
-// The result is rounded per the precision and rounding mode of z.
-// If z's precision is 0, it is changed to 64 before rounding takes
-// effect.
+// UnmarshalText implements the encoding.TextUnmarshaler interface. The result
+// is rounded per the precision and rounding mode of z. If z's precision is 0,
+// it is changed to DefaultDecimalPrec before rounding takes effect.
 func (z *Decimal) UnmarshalText(text []byte) error {
 	// TODO(db47h): get rid of the []byte/string conversion
 	_, _, err := z.Parse(string(text), 0)

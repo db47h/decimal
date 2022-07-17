@@ -111,7 +111,7 @@ func (z *Decimal) scan(r io.ByteScanner, base int) (f *Decimal, b int, err error
 	default:
 		panic("unexpected exponent base")
 	}
-	// exp consumed - not needed anymoregri
+	// exp consumed - not needed anymore
 
 	// apply 10**exp10
 	if MinExp <= exp10 && exp10 <= MaxExp {
@@ -186,8 +186,8 @@ func (z *Decimal) pow2(n uint64) *Decimal {
 // It sets z to the (possibly rounded) value of the corresponding floating-
 // point value, and returns z, the actual base b, and an error err, if any. The
 // entire string (not just a prefix) must be consumed for success. If z's
-// precision is 0, it is changed to fit all digits of the mantissa before
-// rounding takes effect. The number must be of the form:
+// precision is 0, it is changed to DefaultDecimalPrec before rounding takes
+// effect. The number must be of the form:
 //
 //     number    = [ sign ] ( float | "inf" | "Inf" ) .
 //     sign      = "+" | "-" .
@@ -214,26 +214,22 @@ func (z *Decimal) pow2(n uint64) *Decimal {
 // of 'p' or 'P', if present (an "e" or "E" exponent indicator cannot be
 // distinguished from a mantissa digit).
 //
-// Note that rounding only happens if z's precision is not zero and less than
-// the number of digits in the mantissa or with a base 2 exponent, in which case
-// it is best to use ParseFloat then z.SetFloat.
-//
-// The returned *Decimal f is nil and the value of z is valid but not defined if
+// The returned *Decimal d is nil and the value of z is valid but not defined if
 // an error is reported.
 //
-func (z *Decimal) Parse(s string, base int) (f *Decimal, b int, err error) {
+func (z *Decimal) Parse(s string, base int) (d *Decimal, b int, err error) {
 	// scan doesn't handle ±Inf
 	if len(s) == 3 && (s == "Inf" || s == "inf") {
-		f = z.SetInf(false)
+		d = z.SetInf(false)
 		return
 	}
 	if len(s) == 4 && (s[0] == '+' || s[0] == '-') && (s[1:] == "Inf" || s[1:] == "inf") {
-		f = z.SetInf(s[0] == '-')
+		d = z.SetInf(s[0] == '-')
 		return
 	}
 
 	r := strings.NewReader(s)
-	if f, b, err = z.scan(r, base); err != nil {
+	if d, b, err = z.scan(r, base); err != nil {
 		return
 	}
 

@@ -1521,8 +1521,9 @@ func (z *Decimal) round(sbit uint) {
 		// or when the rounding bit is zero. Avoid computation otherwise.
 		sbit = z.mant.sticky(r)
 	}
-	sbit &= 1 // be safe and ensure it's a single bit	// cut off extra words
+	sbit &= 1 // be safe and ensure it's a single bit
 
+	// cut off extra words
 	n := (z.prec + (_DW - 1)) / _DW // mantissa length in words for desired precision
 	if m > n {
 		copy(z.mant, z.mant[m-n:]) // move n last words to front

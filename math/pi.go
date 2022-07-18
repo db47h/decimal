@@ -54,21 +54,33 @@ func pi(z *decimal.Decimal) *decimal.Decimal {
 		// 57 and 761 respectively). Since increasing the precision may result
 		// in increasing the decimals storage by one Word anyway, we just go
 		// ahead and add a whole word of precision.
-		p    = prec + decimal.DigitsPerWord
-		x    = new(decimal.Decimal).SetPrec(p).SetUint64(1)
-		sum  = new(decimal.Decimal).SetPrec(p)
-		last = new(decimal.Decimal).SetPrec(p) // last sum value for comparison
+		p   = prec + decimal.DigitsPerWord
+		x   = new(decimal.Decimal).SetPrec(p)
+		sum = new(decimal.Decimal).SetPrec(p)
+		// epsilon value for (m*l)/x
+		// sum tends towards 1.35914e7, so epsilon is 1×10^(7-p+1)
+		eps = decimal.NewDecimal(1, int(8-p)).SetPrec(1)
 	)
 
 	// z is also used as a temp value, so increase its precision temporarily.
 	z.SetPrec(p)
 
+	// pre-allocate z, x, and sum
+	words := (p+(decimal.DigitsPerWord-1))/decimal.DigitsPerWord + 1
+	if bits, _ := z.BitsExp(); cap(bits) < int(words) {
+		z.SetBitsExp(make([]decimal.Word, 0, words), 0)
+	}
+	x.SetBitsExp(make([]decimal.Word, 0, words), 0).SetUint64(1)
+	sum.SetBitsExp(make([]decimal.Word, 0, words), 0)
+
 	for {
 		// s = s + (m * l) / x
-		sum.Add(sum, z.Quo(z.SetInt(ti.Mul(m, l)), x))
-		if last.Cmp(sum) == 0 {
+		z.Quo(z.SetInt(ti.Mul(m, l)), x)
+		// just check that |(m*l)/x| < epsilon instead of |sum-last_sum| <= epsilon
+		if z.CmpAbs(eps) < 0 {
 			break
 		}
+		sum.Add(sum, z)
 		// k = k + 12
 		k.Add(k, twelve)
 		// l = l + 545140134
@@ -80,7 +92,6 @@ func pi(z *decimal.Decimal) *decimal.Decimal {
 		m.Quo(m, ti)
 		// x = x × -262537412640768000
 		x.Mul(x, xm)
-		last.Copy(sum)
 	}
 	return z.Quo(z.Mul(z.Sqrt(c2), c1), sum).SetPrec(prec)
 }

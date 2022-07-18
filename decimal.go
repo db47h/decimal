@@ -336,6 +336,37 @@ func (x *Decimal) Cmp(y *Decimal) int {
 	return 0
 }
 
+// Cmp compares |x| and |y| and returns:
+//
+//   -1 if x <  y
+//    0 if x == y
+//   +1 if x >  y
+//
+func (x *Decimal) CmpAbs(y *Decimal) int {
+	if debugDecimal {
+		x.validate()
+		y.validate()
+	}
+
+	mx := x.form // 0, 1 finite, 2 inf
+	my := y.form
+	switch {
+	case mx < my:
+		return -1
+	case mx > my:
+		return +1
+	}
+	// mx == my
+
+	// only if |mx| == 1 we have to compare the mantissae
+	switch mx {
+	case +1:
+		return x.ucmp(y)
+	}
+
+	return 0
+}
+
 // ord classifies x and returns:
 //
 //	-2 if -Inf == x
@@ -345,15 +376,7 @@ func (x *Decimal) Cmp(y *Decimal) int {
 //	+2 if x == +Inf
 //
 func (x *Decimal) ord() int {
-	var m int
-	switch x.form {
-	case finite:
-		m = 1
-	case zero:
-		return 0
-	case inf:
-		m = 2
-	}
+	m := int(x.form)
 	if x.neg {
 		m = -m
 	}

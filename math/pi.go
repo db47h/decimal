@@ -36,7 +36,6 @@ func pi(prec uint) *decimal.Decimal {
 var (
 	one     = new(decimal.Decimal).SetUint64(1)
 	two     = new(decimal.Decimal).SetUint64(2)
-	four    = new(decimal.Decimal).SetUint64(4)
 	half    = decimal.NewDecimal(5, -1)
 	quarter = decimal.NewDecimal(25, -2)
 )
@@ -100,6 +99,8 @@ func computePi(z *decimal.Decimal) *decimal.Decimal {
 		p.Set(z.Mul(p, two))
 	}
 
-	a.Mul(u.Add(a, b), u)
-	return z.Quo(a, u.Mul(t, four)).SetPrec(prec)
+	// π = (a_n+1 + b_n+1)^2 / 4t
+	// since at this point a ≈ b
+	// π = (2a)^2/4t = a^2/t
+	return z.Quo(u.Mul(a, a), t).SetPrec(prec)
 }

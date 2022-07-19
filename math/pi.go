@@ -85,8 +85,7 @@ func pi(z *decimal.Decimal) *decimal.Decimal {
 
 		p.Set(z.Mul(p, two))
 	}
-	z.Add(a, b)
-	a.Mul(z, z)
-	t.Mul(t, four)
-	return z.Quo(a, t).SetPrec(prec)
+
+	a.Mul(u.Add(a, b), u)
+	return z.Quo(a, u.Mul(t, four)).SetPrec(prec)
 }

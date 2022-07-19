@@ -4,11 +4,19 @@ import (
 	"github.com/db47h/decimal"
 )
 
-var _pi = pi(new(decimal.Decimal).SetPrec(decimal.DefaultDecimalPrec * 2))
+var _pi = pi(new(decimal.Decimal).SetPrec(decimal.DefaultDecimalPrec * decimal.DigitsPerWord * 2))
 
+// Pi sets z to the value of π, with precision z.Prec(), and returns z.
+//
+// Since many transcendental functions use π internally, Pi caches the computed
+// value of π that has the highest precision. Access to this cached value is not
+// guarded by a mutex, as a result, Pi, and most transcendental functions are
+// not safe for concurrent use without taking precautionary measures.
+//
+// One strategy around this is to call Pi with at least decimal.DigitsPerWord*2
+// additional digits of precision before starting any goroutines that may end up
+// calling Pi.
 func Pi(z *decimal.Decimal) *decimal.Decimal {
-	// TODO: the _pi cache needs locking. Or document that it's not safe for concurrent use
-	// should it need to be re-computed.
 	if z.Prec() == 0 {
 		z.SetPrec(decimal.DefaultDecimalPrec)
 	}

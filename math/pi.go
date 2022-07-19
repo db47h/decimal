@@ -4,9 +4,10 @@ import (
 	"github.com/db47h/decimal"
 )
 
-var _pi = pi(new(decimal.Decimal).SetPrec(decimal.DefaultDecimalPrec * decimal.DigitsPerWord * 2))
+var _pi = computePi(new(decimal.Decimal).SetPrec(decimal.DefaultDecimalPrec * decimal.DigitsPerWord * 2))
 
-// Pi sets z to the value of π, with precision z.Prec(), and returns z.
+// Pi sets z to the value of π, with precision z.Prec(), and returns z. If
+// z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
 //
 // Since many transcendental functions use π internally, Pi caches the computed
 // value of π that has the highest precision. Access to this cached value is not
@@ -20,10 +21,15 @@ func Pi(z *decimal.Decimal) *decimal.Decimal {
 	if z.Prec() == 0 {
 		z.SetPrec(decimal.DefaultDecimalPrec)
 	}
-	if z.Prec() > _pi.Prec() {
-		pi(_pi)
+	return z.Set(pi(z.Prec()))
+}
+
+// pi returns _pi with a precision that is guaranteed to be at least prec digits.
+func pi(prec uint) *decimal.Decimal {
+	if _pi.Prec() < prec {
+		computePi(_pi.SetPrec(prec))
 	}
-	return z.Set(_pi)
+	return _pi
 }
 
 // constants for pi()
@@ -44,9 +50,9 @@ func allocDec(prec uint) *decimal.Decimal {
 	return new(decimal.Decimal).SetPrec(prec).SetBitsExp(make([]decimal.Word, 0, precWords(prec)), 0)
 }
 
-// pi computes π with the Gauss-Legendre algorithm to z.Prec() decimal digits of
+// computePi computes π with the Gauss-Legendre algorithm to z.Prec() decimal digits of
 // precision and returns z. If z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
-func pi(z *decimal.Decimal) *decimal.Decimal {
+func computePi(z *decimal.Decimal) *decimal.Decimal {
 	prec := z.Prec()
 	if prec == 0 {
 		prec = decimal.DefaultDecimalPrec

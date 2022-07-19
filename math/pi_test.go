@@ -43,10 +43,9 @@ func Test_pi(t *testing.T) {
 	}
 
 	// test random pi values
-	// don't go overboard with the precision. It takes an AMD FX6300 50s to compute 50K digits of pi.
-	maxDigits := int(pi100k.Prec() / 2)
+	maxDigits := int(pi100k.Prec())
 	if testing.Short() {
-		maxDigits = 4000
+		maxDigits = 20000
 	}
 	seed := time.Now().UnixNano()
 	rand.Seed(seed)
@@ -72,7 +71,7 @@ func Test_pi130641(t *testing.T) {
 	// digits 130639... are 09050000... This may cause issues with
 	// decimal.ToNearestEven if we do not compute enough extra digits:
 	// pi(130641) may end with 090 instead of 091.
-	// Testing this takes over 10 minutes on my machine...
+	// Testing this takes <10s on an AMD FX6300.
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -89,7 +88,7 @@ func Test_pi130641(t *testing.T) {
 }
 
 func Benchmark_pi(b *testing.B) {
-	z := new(decimal.Decimal).SetPrec(500)
+	z := new(decimal.Decimal).SetPrec(1200)
 	for i := 0; i < b.N; i++ {
 		pi(z)
 	}

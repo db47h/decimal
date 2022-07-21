@@ -4,7 +4,7 @@ import (
 	"github.com/db47h/decimal"
 )
 
-var _pi = computePi(new(decimal.Decimal).SetPrec(decimal.DefaultDecimalPrec * decimal.DigitsPerWord * 2))
+var _pi = new(decimal.Decimal).SetPrec(0)
 
 // Pi sets z to the value of π, with precision z.Prec(), and returns z. If
 // z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
@@ -27,31 +27,14 @@ func Pi(z *decimal.Decimal) *decimal.Decimal {
 // pi returns _pi with a precision that is guaranteed to be at least prec digits.
 func pi(prec uint) *decimal.Decimal {
 	if _pi.Prec() < prec {
-		computePi(_pi.SetPrec(prec))
+		__pi(_pi.SetPrec(prec))
 	}
 	return _pi
 }
 
-// constants for pi()
-var (
-	one     = new(decimal.Decimal).SetUint64(1)
-	two     = new(decimal.Decimal).SetUint64(2)
-	half    = decimal.NewDecimal(5, -1)
-	quarter = decimal.NewDecimal(25, -2)
-)
-
-func precWords(prec uint) uint { return (prec+(decimal.DigitsPerWord-1))/decimal.DigitsPerWord + 1 }
-
-// allocDec pre-allocates storage for a decimal of precision prec with one
-// additional word of storage and returns the new decimal with its precision set
-// to prec.
-func allocDec(prec uint) *decimal.Decimal {
-	return new(decimal.Decimal).SetPrec(prec).SetBitsExp(make([]decimal.Word, 0, precWords(prec)), 0)
-}
-
-// computePi computes π with the Gauss-Legendre algorithm to z.Prec() decimal digits of
+// __pi computes π with the Gauss-Legendre algorithm to z.Prec() decimal digits of
 // precision and returns z. If z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
-func computePi(z *decimal.Decimal) *decimal.Decimal {
+func __pi(z *decimal.Decimal) *decimal.Decimal {
 	prec := z.Prec()
 	if prec == 0 {
 		prec = decimal.DefaultDecimalPrec

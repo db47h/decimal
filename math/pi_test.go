@@ -35,6 +35,8 @@ func init() {
 }
 
 func Test_computePi(t *testing.T) {
+	// init _pi with defaults
+	Pi(new(decimal.Decimal))
 	// make sure that _pi is ok
 	_piOK := new(decimal.Decimal).SetPrec(_pi.Prec()).Set(pi100k)
 	if _pi.Cmp(_piOK) != 0 {
@@ -58,7 +60,7 @@ func Test_computePi(t *testing.T) {
 				// random prec in [maxDigits/2 + 1, maxDigits]
 				prec := uint(rand.Intn(maxDigits/2) + maxDigits/2 + 1)
 				x.SetPrec(prec).Set(pi100k)
-				if computePi(z.SetPrec(prec)).Cmp(x) != 0 {
+				if __pi(z.SetPrec(prec)).Cmp(x) != 0 {
 					t.Fatalf("SEED %x, bad π value for %d digits\nGot : %g\nWant: %g", seed, prec, z, x)
 				}
 			}
@@ -74,7 +76,7 @@ func Test_pi130641(t *testing.T) {
 		t.SkipNow()
 	}
 	x := new(decimal.Decimal).SetPrec(130641).Set(pi100k)
-	y := computePi(new(decimal.Decimal).SetPrec(130641))
+	y := __pi(new(decimal.Decimal).SetPrec(130641))
 	if x.Cmp(y) != 0 {
 		xs := x.Text('g', -1)
 		ys := x.Text('g', -1)
@@ -84,9 +86,9 @@ func Test_pi130641(t *testing.T) {
 	}
 }
 
-func Benchmark_computePi(b *testing.B) {
+func Benchmark_pi(b *testing.B) {
 	z := new(decimal.Decimal).SetPrec(1200)
 	for i := 0; i < b.N; i++ {
-		computePi(z)
+		__pi(z)
 	}
 }

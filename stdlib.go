@@ -238,11 +238,11 @@ func pow(x Word, n int) (p Word) {
 // An ErrNaN panic is raised by a Decimal operation that would lead to
 // a NaN under IEEE-754 rules. An ErrNaN implements the error interface.
 type ErrNaN struct {
-	msg string
+	Msg string
 }
 
 func (err ErrNaN) Error() string {
-	return err.msg
+	return err.Msg
 }
 
 type nat []Word

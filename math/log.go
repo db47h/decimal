@@ -4,24 +4,24 @@ import (
 	"github.com/db47h/decimal"
 )
 
-// Log sets z to the natural logarithm of x, and returns z.
+// Log sets z to the rounded natural logarithm of x, and returns z.
 //
 // If z's precision is 0, it is changed to x's precision before the operation.
 // Rounding is performed according to z's precision and rounding mode.
 //
 // The function panics if z < 0. The value of z is undefined in that case.
-func Log(z *decimal.Decimal, x *decimal.Decimal) *decimal.Decimal {
+func Log(z, x *decimal.Decimal) *decimal.Decimal {
 	// Log uses the Salamin algorithm described in Michael Beeler, R. William
 	// Gosper, Richard Schroeppel, HAKMEM, Artificial Intelligence Memo No. 239,
-	// Item 143.
+	// Item 143. https://dspace.mit.edu/handle/1721.1/6086
 	//
-	// Another source describes a possibly faster algorithm that builds on top of
-	// this by variable substitution and a different pre-scaling, but I first need
-	// to understand how to get it right for decimal floats. See Sasaki, T.; Kanada,
-	// Y. (1982). "Practically fast multiple-precision evaluation of log(x)".
-	// Journal of Information Processing. 5 (4): 247–250
+	// Another source describes a possibly faster algorithm that builds on top
+	// of this by variable substitution and a different pre-scaling, but I first
+	// need to understand how to get the scaling right for decimal floats. See
+	// Sasaki, T.; Kanada, Y. (1982). "Practically fast multiple-precision
+	// evaluation of log(x)". Journal of Information Processing. 5 (4): 247–250
 	if z == x {
-		z = new(decimal.Decimal).SetMode(z.Mode()).SetPrec(z.Prec())
+		z = new(decimal.Decimal).SetMode(x.Mode()).SetPrec(x.Prec())
 	}
 
 	prec := z.Prec()
@@ -69,13 +69,12 @@ func Log(z *decimal.Decimal, x *decimal.Decimal) *decimal.Decimal {
 		z.SetMantExp(z, m)
 	}
 
-	t := new(decimal.Decimal).SetPrec(p).SetUint64(1)
-	u := new(decimal.Decimal).SetPrec(p).Quo(four, z)
-	agm(z, t, u).Quo(pi(p), t.Mul(z, two))
+	t := dec(p).SetUint64(1)
+	u := dec(p).Quo(four, z)
+	z.Quo(pi(p), t.Mul(agm(z, t, u), two))
 	if m > 0 {
 		// scale back: z-m×log(10)
-		t.Mul(u.SetUint64(uint64(m)), log10(p))
-		z.Sub(z, t)
+		z.Sub(z, t.Mul(u.SetUint64(uint64(m)), log10(p)))
 	}
 	if neg {
 		z.Neg(z)
@@ -118,9 +117,7 @@ func __log10(z *decimal.Decimal) *decimal.Decimal {
 		k++
 	}
 	x := decimal.NewDecimal(1, exp).SetPrec(p)
-	agm(z,
-		new(decimal.Decimal).SetPrec(p).SetUint64(1),
-		new(decimal.Decimal).SetPrec(p).Quo(four, x))
+	agm(z, dec(p).SetUint64(1), dec(p).Quo(four, x))
 	z.Quo(pi(p), x.Mul(z, two))
 
 	// reverse scaling
@@ -131,18 +128,17 @@ func __log10(z *decimal.Decimal) *decimal.Decimal {
 // a, b and z must be distinct decimals. a and b are not preserved.
 func agm(z, a, b *decimal.Decimal) *decimal.Decimal {
 	var (
-		prec    = z.Prec()
-		t       = new(decimal.Decimal).SetPrec(prec)
-		epsilon = decimal.NewDecimal(1, -int(prec))
+		p       = z.Prec()
+		t       = dec(p)
+		epsilon = decimal.NewDecimal(1, -int(p))
 	)
-
 	for {
-		t.Copy(a)
+		t.Set(a)
 		a.Mul(z.Add(a, b), half) // a_n+1 = (a_n+b_n)/2
 		b.Sqrt(z.Mul(t, b))      // b_n+1 = sqrt(a_n × b_n)
 		if z.Sub(a, b).CmpAbs(epsilon) <= 0 {
 			break
 		}
 	}
-	return z.Copy(a)
+	return z.Set(a)
 }

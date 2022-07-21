@@ -36,9 +36,6 @@ func pi(prec uint) *decimal.Decimal {
 // precision and returns z. If z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
 func __pi(z *decimal.Decimal) *decimal.Decimal {
 	prec := z.Prec()
-	if prec == 0 {
-		prec = decimal.DefaultDecimalPrec
-	}
 
 	var (
 		// Increase precision. With only 2 or 4 additional digits there are
@@ -47,10 +44,10 @@ func __pi(z *decimal.Decimal) *decimal.Decimal {
 		// in increasing the decimals storage by one Word anyway, we just go
 		// ahead and add a whole word of precision.
 		pp = prec + decimal.DigitsPerWord
-		a  = allocDec(pp).SetUint64(1)
-		u  = allocDec(pp).Sqrt(two)
-		b  = allocDec(pp).Quo(one, u)
-		t  = allocDec(pp).Set(quarter)
+		a  = dec(pp).SetUint64(1)
+		u  = dec(pp).Sqrt(two)
+		b  = dec(pp).Quo(one, u)
+		t  = dec(pp).Set(quarter)
 		// while p is an int, just use a decimal. This causes less mallocs.
 		p       = new(decimal.Decimal).SetPrec(pp).SetUint64(1)
 		epsilon = decimal.NewDecimal(1, -int(pp))

@@ -92,3 +92,37 @@ func Benchmark_pi(b *testing.B) {
 		__pi(z)
 	}
 }
+
+func Benchmark_expm1T(b *testing.B) {
+	z := new(decimal.Decimal).SetPrec(1200)
+	x := decimal.NewDecimal(37376, -4)
+	for i := 0; i < b.N; i++ {
+		expm1T(z, x)
+	}
+}
+
+func Benchmark_Log(b *testing.B) {
+	z := new(decimal.Decimal).SetPrec(1200)
+	x := decimal.NewDecimal(42, 0)
+	for i := 0; i < b.N; i++ {
+		Log(z, x)
+	}
+}
+
+// func Test_expm1T(t *testing.T) {
+// 	x := decimal.NewDecimal(1, -10)
+// 	z := new(decimal.Decimal).SetPrec(200)
+// 	expm1T(z, x)
+// 	z.SetPrec(z.Prec() + 10)
+// 	z.Add(z, one)
+// 	t.Logf("e^%g  : %g", x, z)
+
+// 	// z = new(decimal.Decimal).SetPrec(210)
+// 	// expm1T(z, x)
+// 	// z.Add(z, one)
+// 	// t.Logf("e^%g  : %g", x, z)
+
+// 	t.Logf("e^%g  : %g", x, z)
+// 	l := Log(new(decimal.Decimal).SetPrec(200), z)
+// 	t.Logf("log(): %.*g", l.Prec(), l)
+// }

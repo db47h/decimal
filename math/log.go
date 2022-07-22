@@ -58,23 +58,24 @@ func Log(z, x *decimal.Decimal) *decimal.Decimal {
 		z.Set(x)
 	}
 
-	// scale z by 10^m so that z×10^m > 2/sqrt(epsilon)
+	// scale z by 10^m so that z×10^m > 2/sqrt(epsilon) in order to get the
+	// correct accuracy for small x and reduce computation times for large x values.
 	// with epsilon = 1×10^-p, 2/sqrt(epsilon) = 2×10^(p/2).
 	// In order to account for odd precisions, we will scale to 2×10^((p+1)/2)
 	// z is mant×10^exp where mant < 1 or mant1×10^(exp-1) and 1 <= mant1 < 10
 	// Supposing a worst case where mant1 <= 2, scaling the exponent so that
 	// m+exp-1 > (p+1)/2 gives m > (p+1)/2-exp+1 => m = (p+1)/2-exp+2
 	m := (int(p)+1)/2 - z.MantExp(nil) + 2
-	if m > 0 {
+	if m != 0 {
 		z.SetMantExp(z, m)
 	}
 
 	t := dec(p).SetUint64(1)
 	u := dec(p).Quo(four, z)
 	z.Quo(pi(p), t.Mul(agm(z, t, u), two))
-	if m > 0 {
+	if m != 0 {
 		// scale back: z-m×log(10)
-		z.Sub(z, t.Mul(u.SetUint64(uint64(m)), log10(p)))
+		z.Sub(z, t.Mul(u.SetInt64(int64(m)), log10(p)))
 	}
 	if neg {
 		z.Neg(z)

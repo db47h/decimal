@@ -19,3 +19,27 @@ func precWords(prec uint) uint { return (prec+(decimal.DigitsPerWord-1))/decimal
 func dec(prec uint) *decimal.Decimal {
 	return new(decimal.Decimal).SetPrec(prec).SetBitsExp(make([]decimal.Word, 0, precWords(prec)), 0)
 }
+
+// pow sets z to the rounded value of x^n and returns z. The precision of z must
+// be non zero and the caller is responsible for allocating guard digits and
+// rounding down z.
+func pow(z, x *decimal.Decimal, n uint64) *decimal.Decimal {
+	if n == 0 {
+		return z.SetUint64(1)
+	}
+	t := dec(z.Prec())
+	y := dec(z.Prec()).SetUint64(1)
+	z.Set(x)
+
+	for n > 1 {
+		if n%2 != 0 {
+			y.Mul(t.Set(y), z)
+		}
+		z.Mul(t.Set(z), t)
+		if z.IsInf() || z.IsZero() {
+			return z
+		}
+		n /= 2
+	}
+	return z.Mul(z, y)
+}

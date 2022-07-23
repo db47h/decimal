@@ -14,7 +14,7 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	}
 	// special cases
 	if x.IsZero() {
-		return z.SetUint64(1).SetPrec(prec)
+		return z.SetUint64(0).SetPrec(prec)
 	}
 	if x.IsInf() {
 		return z.SetInf(x.Signbit()).SetPrec(prec)
@@ -70,13 +70,15 @@ func expm1T(z, x *decimal.Decimal) *decimal.Decimal {
 	//	=> z = 1/(E(x)+1) - 1
 	// This second step preserves the property (e^x)-1 = x for |x| < 1×10^prec:
 	//	=> z = 1/(E(x)+1) - (E(x)+1)/(E(x)+1) => z = -E(x) / (E(x) + 1).
-	// This will preserve precision.
+	// This will preserve precision for e^x - 1.
 	if x.Signbit() {
 		expm1T(z, x.Neg(x))
-		t := new(decimal.Decimal).SetPrec(z.Prec()).Add(z, one)
-		z.Quo(z.Neg(z), t)
 		x.Neg(x)
-		return z
+		if z.IsInf() {
+			return z.SetUint64(0)
+		}
+		t := new(decimal.Decimal).SetPrec(z.Prec()).Add(z, one)
+		return z.Quo(z.Neg(z), t)
 	}
 
 	if x.IsZero() {

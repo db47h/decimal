@@ -41,5 +41,5 @@ func pow(z, x *decimal.Decimal, n uint64) *decimal.Decimal {
 		}
 		n /= 2
 	}
-	return z.Mul(z, y)
+	return z.Mul(t.Set(z), y)
 }

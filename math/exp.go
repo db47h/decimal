@@ -21,16 +21,20 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	}
 
 	var (
-		// TODO: if |x| < 1×10^1, we need to increase the precision more than DigitsPerWord.
-		// i.e. If prec = 34, e^(1×10^-33) = 1.000000000000000000000000000000001e-33
-		// That's 32 0s. In this extreme case, p = (3*prec) - 2 for expm1T
-		// to return the proper result. How to scale this properly so that prec is
-		// pushed only when needed?
-		p = prec*3 - 2
-		// p    = prec + decimal.DigitsPerWord
-
+		p    = prec
 		mode = z.Mode()
 	)
+
+	// TODO: if |x| < 1×10^1, we need to increase the precision more than DigitsPerWord.
+	// i.e. If prec = 34, e^(1×10^-33) = 1.000000000000000000000000000000001e-33
+	// That's 32 0s. In this extreme case, p = (3*prec) - 2 for expm1T
+	// to return the proper result. This is an attempt to scale the precision up
+	// only when needed.
+	if exp := x.MantExp(nil); exp < 0 && -exp < int(prec) {
+		p += 2*uint(-exp) + 2
+	} else {
+		p += decimal.DigitsPerWord
+	}
 
 	z.SetMode(decimal.ToNearestEven).SetPrec(p)
 
@@ -86,11 +90,11 @@ func expm1T(z, x *decimal.Decimal) *decimal.Decimal {
 
 	var (
 		p       = z.Prec()
-		q       = dec(p).Set(one)
-		fact    = dec(p).Set(one)
+		q       = new(decimal.Decimal).SetUint64(1)
+		fq      = dec(p).Set(one) // q!
+		xn      = dec(p)          // x^n
+		sum     = dec(p)
 		t       = dec(p)
-		xn      = dec(p)
-		sum     = dec(p) // first term
 		epsilon = decimal.NewDecimal(1, -int(p))
 		exp     int
 	)
@@ -109,8 +113,8 @@ func expm1T(z, x *decimal.Decimal) *decimal.Decimal {
 	// Maclaurin expansion
 	for {
 		xn.Set(t.Mul(xn, x))
-		fact.Set(t.Mul(fact, q.Add(q, one)))
-		sum.Add(z.Set(sum), t.Quo(xn, fact))
+		fq.Set(t.Mul(fq, q.Add(q, one)))
+		sum.Add(z.Set(sum), t.Quo(xn, fq))
 		if t.Sub(z, sum).CmpAbs(epsilon) <= 0 {
 			break
 		}

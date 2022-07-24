@@ -4,6 +4,10 @@ import (
 	"github.com/db47h/decimal"
 )
 
+func Exp(z, x *decimal.Decimal) *decimal.Decimal {
+	return z.Add(Expm1(z, x), one)
+}
+
 func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	if z == x {
 		z = new(decimal.Decimal).SetMode(x.Mode()).SetPrec(x.Prec())
@@ -147,7 +151,7 @@ func expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	// 0 < x < 1
 	var (
 		prec = z.Prec()
-		p    = prec + decimal.DefaultDecimalPrec
+		p    = prec + decimal.DigitsPerWord
 		t    = new(decimal.Decimal).SetPrec(p)
 		u    = new(decimal.Decimal).SetPrec(p)
 	)

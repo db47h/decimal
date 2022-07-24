@@ -22,10 +22,10 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 		return z.SetUint64(0).SetPrec(prec)
 	}
 	if x.IsInf() {
-		if z.Signbit() {
+		if x.Signbit() {
 			return z.SetInt64(-1).SetPrec(prec)
 		}
-		return z.SetInf(true).SetPrec(prec)
+		return z.SetInf(false).SetPrec(prec)
 	}
 
 	var (

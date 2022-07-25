@@ -1,12 +1,16 @@
 package math
 
 import (
+	"math"
+
 	"github.com/db47h/decimal"
 )
 
 func Exp(z, x *decimal.Decimal) *decimal.Decimal {
 	return z.Add(Expm1(z, x), one)
 }
+
+var maxExpExp = 1 + int(math.Ceil(math.Log10(math.Ln10*decimal.MaxExp)))
 
 func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	if z == x {
@@ -16,22 +20,35 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	if prec == 0 {
 		prec = x.Prec()
 	}
+	exp := x.MantExp(nil)
 
 	// special cases
 	if x.IsZero() {
 		return z.SetUint64(0).SetPrec(prec)
 	}
-	if x.IsInf() {
+	if x.IsInf() || exp >= maxExpExp {
 		if x.Signbit() {
 			return z.SetInt64(-1).SetPrec(prec)
 		}
 		return z.SetInf(false).SetPrec(prec)
 	}
 
+	// Exp(x) <= 10^-prec
+	// x^10exp <= -prec(log(10))
+	//
+
+	// TODO: confirm this and find a way to avoid the NewDecimal.
+	if x.CmpAbs(decimal.NewDecimal(9, -int(prec)-1)) <= 0 {
+		if exp < 0 {
+			return z.Set(x).SetPrec(prec)
+		} else {
+			return z.SetInt64(-1).SetPrec(prec)
+		}
+	}
+
 	var (
-		p    = prec
+		p    uint
 		mode = z.Mode()
-		exp  = x.MantExp(nil)
 		neg  = x.Signbit()
 		t    = new(decimal.Decimal)
 	)
@@ -52,10 +69,12 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 
 	// 0 < x < +inf
 
-	// scale x down for x >= 1: e^(x×10^n) = (e^x)^(10^n)
-	// this greatly improves performance for any x >= 1.
-	if exp > 0 {
+	// scale x down for x >= 0.1: e^(x×10^n) = (e^x)^(10^n)
+	// Scaling x to be < 0.1 instead of < 1 reduces iterations by about a third.
+	if exp >= 0 {
 		x.MantExp(x)
+		x.SetMantExp(x, -1)
+		exp++
 	}
 
 	// 0 < x < 1
@@ -66,10 +85,21 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	// to return the proper result.
 	// TODO: This is an attempt to scale the precision up only when needed.
 	// Testing showed that this works, but we need to prove that this is correct.
-	if exp < 0 && -exp < int(prec) {
-		p += 2*uint(-exp) + 2
+	// TODO: gate x^exp such that too small exponents return 0 and too large return +Inf
+	// largest number is 1×10^MaxExp. So max X is ln(10^MaxExp) = MaxExp×ln(10). Anything with exp >= 11 is +Inf
+
+	if exp < 0 {
+		if -exp < int(prec) {
+			p = 2*uint(-exp) + 2
+		} else {
+			p = 2
+		}
 	} else {
-		p += decimal.DigitsPerWord
+		p = uint(exp) + 2
+	}
+	p += prec
+	if p < 4 {
+		p = 4
 	}
 
 	z.SetMode(decimal.ToNearestEven).SetPrec(p)
@@ -80,11 +110,14 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	// Scale back up. With x >= 1, we can safely add 1 and subtract again
 	// without loss of precision in the final result.
 	if exp > 0 {
-		// Since the largest x for which e^x is representable as a Decimal is
-		// about 4.944763833×10^9, z will overflow (+Inf) before n, so the
-		// result accuracy of t.Uint64() can be ignored.
-		n, _ := t.SetMantExp(t.SetUint64(1), exp).Uint64()
-		z.Sub(pow(z, t.Add(z, one), n), one)
+		// with exp clamped at 11, upow will not overflow. z may overflow,
+		// but this is expected and will produce +Inf.
+		pow(z, t.Add(z, one), upow(10, uint64(exp)))
+		// z.Sub(z×10^LARGE, 1) does not check that z-1 will not change z's value. Subtract only if needed.
+		// TODO: test edge case and proof
+		if z.MantExp(nil) < int(prec) {
+			z.Sub(z, one)
+		}
 		// restore x
 		x.SetMantExp(x, exp)
 	}
@@ -92,9 +125,15 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 	if neg {
 		x.Neg(x)
 		if z.IsInf() {
-			return z.SetUint64(0)
+			return z.SetUint64(0).SetPrec(prec)
 		}
-		t.SetPrec(p).Add(z, one)
+		// same as above, add only if z is small enough.
+		// TODO: test edge case and proof
+		if e := z.MantExp(nil); e <= int(prec) {
+			t.Add(z, one)
+		} else {
+			t.Set(z)
+		}
 		z.Quo(z.Neg(z), t)
 	}
 
@@ -116,16 +155,14 @@ func Expm1(z, x *decimal.Decimal) *decimal.Decimal {
 //
 func expm1T(z, x *decimal.Decimal) *decimal.Decimal {
 
-	// 0 < x < +Inf
+	// 0 < x < 0.1
 
 	var (
-		p       = z.Prec()
-		q       = new(decimal.Decimal).SetUint64(1)
-		fq      = dec(p).Set(one) // q!
-		xn      = dec(p)          // x^n
-		sum     = dec(p)
-		t       = dec(p)
-		epsilon = decimal.NewDecimal(1, -int(p))
+		p   = z.Prec()
+		q   = new(decimal.Decimal).SetUint64(2)
+		xn  = dec(p) // x^n / !q
+		sum = dec(p)
+		t   = dec(p)
 	)
 
 	// term 1 for sum and x^n
@@ -133,12 +170,13 @@ func expm1T(z, x *decimal.Decimal) *decimal.Decimal {
 
 	// Maclaurin expansion
 	for {
-		xn.Set(t.Mul(xn, x))
-		fq.Set(t.Mul(fq, q.Add(q, one)))
-		sum.Add(z.Set(sum), t.Quo(xn, fq))
-		if t.Sub(z, sum).CmpAbs(epsilon) <= 0 {
+		xn.Quo(t.Mul(xn, x), q)
+		// TODO: checking xn should be enough to quit (see z.Sub(z, one) gating above when x < 0)
+		sum.Add(z.Set(sum), xn)
+		if z.Cmp(sum) == 0 {
 			break
 		}
+		q.Add(q, one)
 	}
 
 	return z

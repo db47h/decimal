@@ -1,6 +1,8 @@
 package math
 
-import "github.com/db47h/decimal"
+import (
+	"github.com/db47h/decimal"
+)
 
 // constants
 var (
@@ -41,5 +43,25 @@ func pow(z, x *decimal.Decimal, n uint64) *decimal.Decimal {
 		}
 		n /= 2
 	}
+	// TODO: implement a fastpath IsUint64(n) function.
+	if y.Cmp(one) == 0 {
+		return z
+	}
 	return z.Mul(t.Set(z), y)
+}
+
+func upow(x, n uint64) uint64 {
+	if n == 0 {
+		return 1
+	}
+	z := x
+	y := uint64(1)
+	for n > 1 {
+		if n%2 != 0 {
+			y *= z
+		}
+		z *= z
+		n /= 2
+	}
+	return z * y
 }

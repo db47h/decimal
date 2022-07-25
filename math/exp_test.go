@@ -11,8 +11,8 @@ import (
 const maxPrec = 15000
 
 // init _pi and _log10 to a sufficiently high precision
-var _ = math.Pi(new(decimal.Decimal).SetPrec(maxPrec + decimal.DigitsPerWord*2))
-var _ = math.Log(new(decimal.Decimal).SetPrec(maxPrec), decimal.NewDecimal(1, 1))
+// var _ = math.Pi(new(decimal.Decimal).SetPrec(maxPrec + decimal.DigitsPerWord*2))
+// var _ = math.Log(new(decimal.Decimal).SetPrec(maxPrec), decimal.NewDecimal(1, 1))
 
 func Benchmark_Expm1(b *testing.B) {
 	for _, prec := range []uint{34, 100, 200, 500, 1000} {
@@ -40,7 +40,13 @@ func Test_Expm1(t *testing.T) {
 			"1.0000000000000000000000000000000005000000000000000000000000000000001666666666666666666666666666666667083e-33"},
 		{"-1e-33",
 			"-9.99999999999999999999999999999999500000000000000000000000000000000166666666666666666666666666666666625e-34"},
-		{"-1e200", "0"},
+		{"-1e200", "-1"},
+		{"-1e10", "-1"},
+		{"-1e9", "-1"}, // TODO: VERY SLOW !!!
+		{"1e9",
+			"8.0029817706609725330419093743650006887823149971763745653564454733413869655349877175229050148235369720236e+434294481"},
+		{"-1e8", "-1"}, // still slow
+		{"1e-100", "1e-100"},
 		{"-1e-200", "-1e-200"},
 		{"1e8",
 			"1.5499767466484265044184585433334652127927121152116450579814179720474638638555243371803334216641703770775e43429448"},

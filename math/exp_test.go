@@ -47,10 +47,10 @@ func Test_Expm1(t *testing.T) {
 		{"-1e200", "-1"},
 		{"-1e10", "-1"},
 		{"-1e9", "-1"},
+		{"-1e8", "-1"},
 		{"1e9",
 			"8.002981770660972533041909374365000688782314997176374565356445473341386965534987717522905014823536972023e+434294481"},
 		{"5e9", "+Inf"},
-		{"-1e8", "-1"},
 		{"1e-100", "1e-100"},
 		{"-1e-200", "-1e-200"},
 		{"1e8",
@@ -81,10 +81,9 @@ func Test_Expm1(t *testing.T) {
 				if _, _, err := r.SetPrec(prec).Parse(d.res, 10); err != nil {
 					t.Fatalf("failed to parse result: %s", err)
 				}
-				if z.Cmp(r) == 0 {
-					continue
+				if z.Cmp(r) != 0 {
+					t.Fatalf("error at precision %d: Expected:\n%g\nGot:\n%g", prec, r, z)
 				}
-				t.Fatalf("Error at precision %d: Expected:\n%g\nGot:\n%g", prec, r, z)
 			}
 		})
 	}

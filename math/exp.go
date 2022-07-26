@@ -43,6 +43,9 @@ import (
 //
 // - TODO: Need mathematical proof for p += -exp*2+2. Test results are however
 //   correct for the extreme case where -exp=prec-1 with p >= z.prec-exp*2+2.
+// - The main iteration does not use Horner’s scheme. We check instead if adding
+//   x^n/n! to the sum may change the sum and exit the loop if it does not. This
+//	 leads to an extra iteration about half of the time.
 
 func Exp(z, x *decimal.Decimal) *decimal.Decimal {
 	if z == x {
@@ -150,8 +153,8 @@ func expT(z, x *decimal.Decimal, m1 bool) *decimal.Decimal {
 
 	var (
 		mode = z.Mode()
-		q    = new(decimal.Decimal).SetUint64(2)
-		xn   = dec(p).Set(x) // x^n / !q
+		n    = new(decimal.Decimal).SetUint64(2)
+		xn   = dec(p).Set(x) // x^n / n!
 		t    = dec(p)
 	)
 
@@ -160,13 +163,13 @@ func expT(z, x *decimal.Decimal, m1 bool) *decimal.Decimal {
 
 	// Maclaurin expansion
 	for {
-		xn.Quo(t.Mul(xn, x), q)
+		xn.Quo(t.Mul(xn, x), n)
 		if xn.IsZero() || xn.MantExp(nil) < z.MantExp(nil)-int(p) {
 			// xn too small for z.Add(z, xn) to change z.
 			break
 		}
 		z.Add(z, xn)
-		q.Add(q, one)
+		n.Add(n, one)
 	}
 
 	// Scale back up. If exp > 0, |x| >= 1 and we can safely add 1 and subtract

@@ -92,11 +92,3 @@ func Benchmark_pi(b *testing.B) {
 		__pi(z)
 	}
 }
-
-func Benchmark_Log(b *testing.B) {
-	z := new(decimal.Decimal).SetPrec(1200)
-	x := decimal.NewDecimal(42, 0)
-	for i := 0; i < b.N; i++ {
-		Log(z, x)
-	}
-}

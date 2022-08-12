@@ -7,7 +7,7 @@ import (
 var _pi = new(decimal.Decimal).SetPrec(0)
 
 // Pi sets z to the value of π, with precision z.Prec(), and returns z. If
-// z.Prec() is zero, it is set to decimal.DefaultDecimalPrec.
+// z.Prec() is zero, the precision is set to decimal.DefaultDecimalPrec.
 //
 // Since many transcendental functions use π internally, Pi caches the computed
 // value of π that has the highest precision. Access to this cached value is not
@@ -76,7 +76,7 @@ func __pi(z *decimal.Decimal) *decimal.Decimal {
 			break
 		}
 
-		p.Set(z.Mul(p, two))
+		p.Add(p, p)
 	}
 
 	// π = (a_n+1 + b_n+1)^2 / 4t

@@ -68,7 +68,7 @@ func Test_computePi(t *testing.T) {
 	}
 }
 
-func Test_pi130641(t *testing.T) {
+func Test_computePi_130641(t *testing.T) {
 	// digits 130639... are 09050000... This may cause issues with
 	// decimal.ToNearestEven if we do not compute enough extra digits:
 	// pi(130641) may end with 090 instead of 091.
